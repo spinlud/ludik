@@ -17,6 +17,7 @@
   "dependencies": {
     "@tweenjs/tween.js": "^17.3.0",
     "body-parser": "^1.18.3",
+    "config": "^3.1.0",
     "cookie-parser": "^1.4.4",
     "dat.gui": "^0.7.5",
     "express": "^4.16.4",
@@ -39,7 +40,6 @@
     "@babel/preset-env": "^7.3.1",
     "babel-loader": "^8.0.5",
     "clean-webpack-plugin": "^1.0.1",
-    "config": "^3.0.1",
     "copy-webpack-plugin": "^5.0.0",
     "css-loader": "^2.1.0",
     "favicons-webpack-plugin": "0.0.9",
