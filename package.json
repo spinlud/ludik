@@ -8,7 +8,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "webpack-dev-server --https --config webpack.dev.js",
-    "build": "webpack --https -p --config webpack.prod.js"
+    "build": "webpack --https -p --config webpack.prod.js",
+    "heroku-postbuild": "webpack --https -p --config webpack.prod.js"
   },
   "author": "Ludovico Fabbri",
   "license": "ISC",
