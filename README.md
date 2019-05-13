@@ -1,6 +1,6 @@
 # ludik
 
-Experimental website for my musical project [LUDIK](https://www.ludik.xyz).
+Experimental webgl based website for my musical project [LUDIK](https://www.ludik.xyz).
 Listen on [Spotify](https://open.spotify.com/artist/0lMpvELTTsVuCMeAQWuzpN?si=6dWnTikrTvS5DcjY-2MKgg). 
 
 ## Thanks to
