@@ -10,7 +10,7 @@
         <a href="https://www.facebook.com/LUDIK-363454581126098" target="_blank" id="facebookLink" class="icon-link"></a>
         <a href="https://www.instagram.com/ludik.music/?hl=it" target="_blank" id="instagramLink" class="icon-link"></a>
         <a href="mailto:ludovico.fabbri@gmail.com" target="_blank" id="mailLink" class="icon-link"></a>
-        <a href="" target="_blank" id="githubLink" class="icon-link"></a>
+        <a href="https://github.com/revyTH/ludik" target="_blank" id="githubLink" class="icon-link"></a>
     </div>
 
 </template>
