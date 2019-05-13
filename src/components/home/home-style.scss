@@ -1,0 +1,82 @@
+/*
+ * ---------------------------------------------------------------------------------------
+ * home-style.scss
+ * ---------------------------------------------------------------------------------------
+ */
+
+@import "../../styles/base/reset";
+@import "../../styles/base/typography";
+@import "../../styles/helpers/variables";
+@import "../../styles/helpers/colors";
+@import "../../styles/helpers/mixins";
+
+$home-font-size: 1.1em;
+$home-line-height: 1.5em;
+$home-font-color: lighten($silver-chalice2, 10%);
+
+.home-root {
+  margin: $home-wide-padding;
+  padding: $home-wide-padding * 0.5;
+  background: rgba(black, $home-bg-opacity);
+
+  @include border-radius(0.5em);
+
+  @include narrow-screen {
+    margin: $home-narrow-padding;
+    padding: $home-narrow-padding;
+  }
+}
+
+.home-title {
+  display: table;
+  margin: auto;
+  font-family: outerspace-militia;
+  color: white;
+  text-align: center;
+  text-shadow: 0 0 8px white;
+
+  font-size: 4em;
+  // line-height: calc(4.5em);
+
+  @include narrow-screen {
+    margin-top: $home-narrow-padding;
+    font-size: 2em;
+  }
+}
+
+.home-content {
+  margin-top: $home-wide-padding;
+
+  @include narrow-screen {
+    margin-top: 2 * $home-narrow-padding;
+  }
+}
+
+.home-text {
+  font-size: $home-font-size;
+  line-height: $home-line-height;
+  color: $home-font-color;
+}
+
+.home-text-description {
+  font-size: 1em;
+  line-height: 1.2em;
+  color: $silver-chalice2;
+}
+
+.home-link {
+  font-size: $home-font-size;
+  line-height: $home-line-height;
+  text-decoration: none;
+  color: $scifi-cyan-hover;
+
+  &:hover {
+    color: lighten($scifi-cyan-hover, 60%);
+    text-shadow: 0 0 2px lighten($scifi-cyan-hover, 60%);
+  }
+}
+
+.justify-text {
+  text-align: justify;
+  text-justify: inter-word;
+}

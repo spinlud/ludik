@@ -1,0 +1,84 @@
+/*
+ * ---------------------------------------------------------------------------------------
+ * base.scss
+ * ---------------------------------------------------------------------------------------
+ */
+
+@import "../helpers/mixins";
+@import "../helpers/colors";
+
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+
+  /* autohide scrollbar on internet explorer */
+  /* -ms-overflow-style: -ms-autohiding-scrollbar; */
+
+
+  @include custom-scrollbar(.25em, darken($tundora, 10%), mix(darken($tundora, 10%), white, 50%));
+
+  // Problem on scrollbar...
+  @include firefox-only {
+    @include no-scroll-bar;
+  }
+
+}
+
+body {
+  min-height: 100%;
+  position: relative;
+
+  font-family: roboto-condensed, "Helvetica Neue", "Helvetica", "sans-serif";
+  font-style: normal;
+  font-weight: normal;
+  font-size: 1.2em;
+  color: lighten($silver-chalice2, 10%);
+  // text-align: justify;
+  // text-justify: inter-word;
+  letter-spacing: 2px;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: none;
+
+}
+
+body *
+{
+  text-shadow: none;
+
+  /* autohide scrollbar on internet explorer */
+  /* -ms-overflow-style: -ms-autohiding-scrollbar; */
+}
+
+canvas {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  outline: none;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0); /* mobile webkit */
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  /* display: none; <- Crashes Chrome on hover */
+  -webkit-appearance: none;
+  margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+}
+
+.disable-hover {
+  pointer-events: none;
+}
+
+
