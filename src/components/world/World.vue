@@ -140,6 +140,16 @@
                         this.toggleStatsFPS()
 
                     }
+                },
+
+                antialias: {
+                    label: "Antialiasing",
+                    checked: false,
+                    handler: () => {
+
+                        this.postProcessingPasses["aaPass"].enabled = !this.postProcessingPasses["aaPass"].enabled
+
+                    }
                 }
 
             }
@@ -610,24 +620,25 @@
 
                 }
 
-                const renderPass = new RenderPass(this.scene, this.camera)
-                renderPass.renderToScreen = false
-                renderPass.clear = true
-
+                const smaaEffect = await createSMAAEffect()
                 const bloomEffect = createBloomEffect()
                 const hueSaturationEffect = createHueSaturationEffect()
                 const brightnessContrastEffect = createBrightnessContrastEffect()
                 const godRayEffect = await createGodRayEffect()
-                const smaaEffect = await createSMAAEffect()
 
-                this.postProcessingEffects["bloomEffect"] = bloomEffect
-                this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
-                this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
-                this.postProcessingEffects["godRayEffect"] = godRayEffect
+                const renderPass = new RenderPass(this.scene, this.camera)
+                renderPass.renderToScreen = false
+                renderPass.clear = true
+
+                const aaPass = new EffectPass(
+                    this.camera,
+                    smaaEffect,
+                )
+                aaPass.renderToScreen = false
+                aaPass.enabled = false
 
                 const beautyPass = new EffectPass(
                     this.camera,
-                    // smaaEffect,
                     hueSaturationEffect,
                     brightnessContrastEffect,
                     godRayEffect,
@@ -636,7 +647,26 @@
                 beautyPass.renderToScreen = true
 
                 this.composer.addPass(renderPass)
+                this.composer.addPass(aaPass)
                 this.composer.addPass(beautyPass)
+
+                this.postProcessingEffects["bloomEffect"] = bloomEffect
+                this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
+                this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
+                this.postProcessingEffects["godRayEffect"] = godRayEffect
+
+                this.postProcessingPasses["aaPass"] = aaPass
+                this.postProcessingPasses["beautyPass"] = beautyPass
+
+                const onKeyup = (e) => {
+                    // L
+                    if (e.keyCode === 76) {
+                        this.commandPanelSwitches.antialias.checked = !this.commandPanelSwitches.antialias.checked
+                        aaPass.enabled = !aaPass.enabled
+                    }
+                }
+
+                this.eventManager.addDomEvent(document, "keyup", onKeyup)
 
             },
 
@@ -3546,6 +3576,7 @@
 
                 this.composer = new EffectComposer(this.renderer)
                 this.postProcessingEffects = { } // post processing effects
+                this.postProcessingPasses = { } // post processing passes
 
                 this.fnlp = [] // loop rendering functions
 
