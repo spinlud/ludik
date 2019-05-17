@@ -4,6 +4,8 @@
  * ---------------------------------------------------------------------------------------------------------------------
  */
 
+require("newrelic"); // monitoring and ping service
+
 const
     express = require("express"),
     redirectToHTTPS = require("express-http-to-https").redirectToHTTPS,
