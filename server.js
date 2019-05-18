@@ -4,8 +4,6 @@
  * ---------------------------------------------------------------------------------------------------------------------
  */
 
-require("newrelic"); // monitoring and ping service
-
 const
     express = require("express"),
     redirectToHTTPS = require("express-http-to-https").redirectToHTTPS,
@@ -14,7 +12,8 @@ const
     cookiePraser = require("cookie-parser"),
     morgan = require("morgan"),
     httpStatusCodes = require("http-status-codes"),
-    config = require("config")
+    config = require("config"),
+    http = require("http")
 ;
 
 const port = process.env.PORT || config.get("port");
@@ -61,7 +60,35 @@ function startServer() {
     });
 }
 
+function pingServer() {
+
+    const timeout = 25 * 60 * 1000 // 25 minutes
+
+    setInterval(function() {
+
+        const options = {
+            host: config.get("url_prod"),
+            port: 8080,
+            path: "/"
+        };
+
+        http.get(options, function(res) {
+            res.on("data", function(chunk) {
+                try {
+                    // optional loggin
+                } catch (err) {
+                    console.log(err.message);
+                }
+            });
+        }).on("error", function(err) {
+            console.log("Error: " + err.message);
+        });
+    }, timeout);
+}
+
 startServer();
+
+pingServer();
 
 
 

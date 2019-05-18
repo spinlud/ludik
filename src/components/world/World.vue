@@ -2215,11 +2215,6 @@
                         doorRightSound.gain.disconnect()
                         doorRightSound.gain.connect(this.audioGlobalGain)
 
-                        // const audioBufferLeft = await this.loaderManager.loadAudio("assets/audio/Pneumatic-door_128cbr.mp3")
-                        // const audioBufferRight = await this.loaderManager.loadAudio("assets/audio/Pneumatic-door_128cbr.mp3")
-                        // doorLeftSound.setBuffer(audioBufferLeft)
-                        // doorRightSound.setBuffer(audioBufferRight)
-
                         doorLeftSound.setBuffer(buffer)
                         doorRightSound.setBuffer(buffer)
 
@@ -3710,30 +3705,6 @@
 
             await this.init()
             this.$store.commit(mutations.worldState, states.world.init)
-
-            // DELETE FROM HERE ---------------------------------------------------
-
-            // require("../../../src/libs/three_0.104.0/examples/js/controls/OrbitControls.js")
-            //
-            // this.camera.position.set(0.4, 20, 6)
-            // this.camera.lookAt(this.scene.position)
-            //
-            // const controls = new T.OrbitControls(this.camera, this.domElement)
-            //
-            // this.fnlp.push((elapsed, delta) => {
-            //     controls.update(delta)
-            // })
-
-            // const world = $("#world")
-            // world.css({opacity: 1, display: "block"})
-            // this.startWebGL()
-            // this.isCommandPanelVisible = true
-            // this.$store.commit(mutations.worldState, states.world.start)
-
-            // // this.isConsoleOpen = true
-            // this.isCommandPanelVisible = true
-
-            // UNTIL HERE ---------------------------------------------------
 
         },
 
