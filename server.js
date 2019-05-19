@@ -24,7 +24,7 @@ let app = express(),
     server = require("http").Server(app);
 
 // Don't redirect if the hostname is `localhost:port`, `0.0.0.0:port` or the route is `/insecure`
-app.use(redirectToHTTPS([/localhost:(\d{4})/, /0.0.0.0:(\d{4})/], [/\/insecure/], 301));
+app.use(redirectToHTTPS([/localhost:(\d{4})/, /192.168.*.*/, /0.0.0.0:(\d{4})/], [/\/insecure/], 301));
 
 app.use(function (req, res, next) {
 
