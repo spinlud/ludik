@@ -45,6 +45,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: none;
 
+  overscroll-behavior: contain; // to prevent pull to refresh on Android
+
 }
 
 body *
