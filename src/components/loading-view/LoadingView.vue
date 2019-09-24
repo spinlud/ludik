@@ -1,6 +1,6 @@
 <template>
     <div id="loading">
-        <loading-spinner></loading-spinner>
+<!--        <loading-spinner></loading-spinner>-->
 
         <div class="blur-text-container">
             <div id="loadingText">
@@ -58,7 +58,7 @@
 
             return {
                 message: isiOS() ?
-                    `iOS users warning: please make sure you have \"Motion & Orientation Access\" enabled in Settings -> Safari.<br><br>
+                    `iOS<13 users warning: please make sure you have \"Motion & Orientation Access\" enabled in Settings -> Safari.<br><br>
                      This app uses WebGL and positional audio.
                      For the best experience Google Chrome and headphones are recommended.
                      `:
@@ -115,6 +115,16 @@
                     sound.setLoop(false)
 
                     const onClick = async () => {
+
+                        // iOS 13 request access to device motion data
+                        if (isiOS() &&
+                            DeviceOrientationEvent && typeof(DeviceOrientationEvent.requestPermission) === "function") {
+                            const permissionState = await DeviceOrientationEvent.requestPermission()
+                            if (permissionState !== "granted") {
+                                // throw new Error("Device orientation access denied from the user")
+                                return
+                            }
+                        }
 
                         AudioManager.resume() // enable AudioContext for website
                         listener.context.resume() // enable AudioContext for three.js
@@ -176,7 +186,8 @@
     .blur-text-container {
         position: absolute;
         width: 100%;
-        top: 60%;
+        /*top: 60%;*/ // <-- when LoadingSpinner was visible
+        top: 50%;
         text-align: center;
         color: #fff;
         cursor: default;
