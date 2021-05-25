@@ -58,16 +58,16 @@
     import { LEVEL_POLY, COMMAND_CONSOLE_POLY } from "./worldPolygons"
 
     import {
-        isTouchDevice,
-        isAndroid,
-        isSafari,
-        sceneTraverse,
-        isInsidePolygon,
-        polygonFromRect,
-        wait,
-        initDatGUI
+      isTouchDevice,
+      isAndroid,
+      isSafari,
+      sceneTraverse,
+      isInsidePolygon,
+      polygonFromRect,
+      wait,
+      initDatGUI, isiOS
     }
-        from "../shared/utils"
+      from "../shared/utils"
 
     import { MyDeviceOrientationControls } from "../shared/MyDeviceOrientationControls"
     import { MyPointerLockControls } from "../shared/MyPointerLockControls.js"
@@ -282,7 +282,7 @@
                         }
                     },
                 },
-                
+
                 commandPanelSwitches: commandPanelSwitches
 
             }
@@ -3540,10 +3540,12 @@
                 this.height = Math.floor(parseFloat(window.getComputedStyle(this.domElement).getPropertyValue("height")))
 
                 this.isTouchDevice = isTouchDevice()
+                this.isiOS = isiOS()
                 this.isAndroid = isAndroid()
                 this.isSafari = isSafari()
 
                 console.log(TAG, "isTouchDevice", this.isTouchDevice)
+                console.log(TAG, "isiOS", this.isiOS)
                 console.log(TAG, "isAndroid", this.isAndroid)
                 console.log(TAG, "isSafari", this.isSafari)
 

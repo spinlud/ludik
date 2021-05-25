@@ -117,8 +117,7 @@
                     const onClick = async () => {
 
                         // iOS 13 request access to device motion data
-                        if (isiOS() &&
-                            DeviceOrientationEvent && typeof(DeviceOrientationEvent.requestPermission) === "function") {
+                        if (isiOS() && DeviceOrientationEvent && typeof(DeviceOrientationEvent.requestPermission) === "function") {
                             const permissionState = await DeviceOrientationEvent.requestPermission()
                             if (permissionState !== "granted") {
                                 // throw new Error("Device orientation access denied from the user")

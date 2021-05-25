@@ -7,7 +7,7 @@
   },
   "main": "server.js",
   "scripts": {
-    "dev": "webpack-dev-server --https --config webpack.dev.js",
+    "dev": "webpack-dev-server --config webpack.dev.js",
     "build": "webpack --https -p --config webpack.prod.js",
     "heroku-postbuild": "webpack --https -p --config webpack.prod.js",
     "start": "node server.js"

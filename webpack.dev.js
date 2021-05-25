@@ -4,6 +4,7 @@
  * ---------------------------------------------------------------------------------------
  */
 
+const fs = require("fs");
 const path = require("path")
 const webpack = require("webpack")
 const merge = require("webpack-merge")
@@ -30,7 +31,12 @@ module.exports = merge(common, {
         inline: true,
         watchOptions: {
             poll: true
-        }
+        },
+        https: true,
+        // https: {
+        //     key: fs.readFileSync(path.resolve(__dirname, "cert/key.pem")),
+        //     cert: fs.readFileSync(path.resolve(__dirname, "cert/cert.pem")),
+        // }
     },
 
     plugins: [

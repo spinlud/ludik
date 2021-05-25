@@ -35,14 +35,7 @@ function isTouchDevice () {
  * @returns Boolean
  */
 function isAndroid () {
-
-    if ((navigator.userAgent || navigator.vendor || window.opera).match( /Android/i)) {
-        return true
-    }
-    else {
-        return false
-    }
-
+    return !!((navigator.userAgent || navigator.vendor || window.opera).match( /Android/i));
 }
 
 /**
@@ -50,23 +43,16 @@ function isAndroid () {
  * @returns Boolean
  */
 function isiOS() {
-
-    var iDevices = [
-        'iPad Simulator',
-        'iPhone Simulator',
-        'iPod Simulator',
-        'iPad',
-        'iPhone',
-        'iPod'
-    ];
-
-    if (!!navigator.platform) {
-        while (iDevices.length) {
-            if (navigator.platform === iDevices.pop()){ return true; }
-        }
-    }
-
-    return false;
+    return [
+            'iPad Simulator',
+            'iPhone Simulator',
+            'iPod Simulator',
+            'iPad',
+            'iPhone',
+            'iPod'
+        ].includes(navigator.platform)
+        // iPad on iOS 13 detection
+        || (navigator.userAgent.includes("Mac") && "ontouchend" in document)
 }
 
 /**
@@ -74,9 +60,7 @@ function isiOS() {
  * @returns {boolean}
  */
 function isSafari () {
-
     return (navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1)
-
 }
 
 /**
@@ -86,9 +70,7 @@ function isSafari () {
  * @returns {boolean} True if it is a dom element, false otherwise
  */
 function isDomElement (obj) {
-
     return obj instanceof Element || obj instanceof HTMLDocument;
-
 }
 
 /**
@@ -98,7 +80,6 @@ function isDomElement (obj) {
  * @param fn
  */
 function sceneTraverse(obj, fn) {
-
     if (!obj) return
 
     fn(obj);
@@ -140,7 +121,6 @@ function isInsidePolygon(nvert, vertX, vertY, testX, testY) {
  * @returns {{vertY: *[], vertX: *[], nvert: number}} Polygon data
  */
 function polygonFromRect (obj3D, quaternion, scene) {
-
     if (!obj3D instanceof THREE.Object3D) {
         throw "Object must be instance of THREE.Object3D"
     }
@@ -159,7 +139,6 @@ function polygonFromRect (obj3D, quaternion, scene) {
         vertX: [x1z1.x, x1z2.x, x2z2.x, x2z1.x],
         vertY: [x1z1.z, x1z2.z, x2z2.z, x2z1.z]
     }
-
 }
 
 /**
@@ -192,7 +171,6 @@ function wait (ms) {
  * ]
  */
 function initDatGUI (conf) {
-
     const gui = new DAT.GUI();
     $( ".dg.ac" ).css("zIndex", "99");
 
@@ -200,7 +178,6 @@ function initDatGUI (conf) {
         // console.log(o);
         gui.add(o, o.name).min(o.min).max(o.max).step(o.step ? o.step : 0.1).onChange(v => {o.cb(v)})
     }
-
 }
 
 export {
