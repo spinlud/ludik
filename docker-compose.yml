@@ -1,0 +1,21 @@
+version: '3.9'
+services:
+  node:
+    container_name: node
+    hostname: node
+    platform: linux/amd64
+    build:
+      context: .
+    ports:
+      - '8080:8080'
+
+  nginx:
+    container_name: nginx
+    hostname: nginx
+    platform: linux/amd64
+    build:
+      context: ./nginx
+    ports:
+      - '80:80'
+    depends_on:
+      - node

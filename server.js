@@ -4,17 +4,17 @@
  * ---------------------------------------------------------------------------------------------------------------------
  */
 
-const
-    express = require("express"),
-    redirectToHTTPS = require("express-http-to-https").redirectToHTTPS,
-    path = require("path"),
-    bodyParser = require("body-parser"),
-    cookiePraser = require("cookie-parser"),
-    morgan = require("morgan"),
-    httpStatusCodes = require("http-status-codes"),
-    config = require("config"),
-    http = require("http")
-;
+
+const express = require("express");
+const redirectToHTTPS = require("express-http-to-https").redirectToHTTPS;
+const path = require("path");
+const bodyParser = require("body-parser");
+const cookiePraser = require("cookie-parser");
+const morgan = require("morgan");
+const httpStatusCodes = require("http-status-codes");
+const config = require("config");
+const http = require("http");
+
 
 const port = process.env.PORT || config.get("port");
 const platform = process.platform;
@@ -24,21 +24,18 @@ let app = express(),
     server = require("http").Server(app);
 
 // Don't redirect if the hostname is `localhost:port`, `0.0.0.0:port` or the route is `/insecure`
-app.use(redirectToHTTPS([/localhost:(\d{4})/, /192.168.*.*/, /0.0.0.0:(\d{4})/], [/\/insecure/], 301));
+// app.use(redirectToHTTPS([/localhost:(\d{4})/, /192.168.*.*/, /0.0.0.0:(\d{4})/], [/\/insecure/], 301));
 
 app.use(function (req, res, next) {
-
     res.setHeader("Access-Control-Allow-Origin", req.get("Origin") || "*");
-
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authentication, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5,  Date, X-Api-Version, X-File-Name");
-
     res.setHeader("Access-Control-Allow-Credentials", true);
 
     if (req.method === "OPTIONS") {
         return res.sendStatus(httpStatusCodes.OK);
-    } else {
+    }
+    else {
         return next();
     }
 });
@@ -60,6 +57,7 @@ function startServer() {
     });
 }
 
+// Only necessary on Heroku to keep the dynamo up
 function pingServer() {
 
     const timeout = 25 * 60 * 1000 // 25 minutes
@@ -88,7 +86,7 @@ function pingServer() {
 
 startServer();
 
-pingServer();
+// pingServer();
 
 
 
