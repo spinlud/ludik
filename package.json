@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "webpack-dev-server --config webpack.dev.js",
     "build": "webpack --https -p --config webpack.prod.js",
-    "heroku-postbuild": "webpack --https -p --config webpack.prod.js",
     "start": "node server.js",
+    "certbot-ssl-certificate": "./certbot/generate-certificate.sh",
     "docker-compose": "docker compose up --build"
   },
   "author": "Ludovico Fabbri",
