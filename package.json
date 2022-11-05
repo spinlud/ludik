@@ -11,13 +11,16 @@
     "build": "webpack --https -p --config webpack.prod.js",
     "start": "node server.js",
     "certbot-ssl-certificate": "./certbot/generate-certificate.sh",
+    "certbot-ssl-certificate-renew": "./certbot/renew-certificate.sh",
+    "docker-stop-containers": "docker ps -a | awk -F '[ ]+' 'NR>1 {print($1)}' | xargs -n1 docker stop | xargs -n1 docker rm --volumes",
+    "docker-delete-images": "docker rmi $(docker images -q)",
     "docker-compose": "docker compose up --build"
   },
   "author": "Ludovico Fabbri",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/revyTH/ludik"
+    "url": "git+https://github.com/spinlud/ludik.git"
   },
   "dependencies": {
     "@tweenjs/tween.js": "^17.3.0",
