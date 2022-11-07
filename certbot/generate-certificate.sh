@@ -5,6 +5,7 @@ set -e
 DOMAIN="music.ludik.xyz"
 EMAIL="ludovico.fabbri@gmail.com"
 
+# Run this when nginx and node services are down
 sudo docker run -it --rm --name certbot \
     -v "/etc/letsencrypt:/etc/letsencrypt" \
     -v "/var/lib/letsencrypt:/var/lib/letsencrypt" \
