@@ -180,9 +180,9 @@
                         min: 0.2,
                         max: 1.0,
                         step: 0.2,
-                        value: 0.8,
-                        default: "0.8",
-                        valueFormatted: "HIGH",
+                        value: 1.0,
+                        default: "1.0",
+                        valueFormatted: WEBGL_RESOLUTIONS.full,
                         handler: () => {
                             const ratio = window.devicePixelRatio * Number(this.commandPanelSliders.resolution.value)
                             this.renderer.setPixelRatio(ratio)
@@ -220,8 +220,8 @@
                         min: -0.500,
                         max: 0.500,
                         step: 0.001,
-                        value: 0.036,
-                        default: 0.036,
+                        value: 0.140,
+                        default: 0.140,
                         valueFormatted: Number(0.036).toFixed(3),
                         handler: () => {
                             this.postProcessingEffects["brightnessContrastEffect"]
@@ -237,8 +237,8 @@
                         min: -1.000,
                         max: 1.000,
                         step: 0.001,
-                        value: 0.200,
-                        default: 0.200,
+                        value: 0.400,
+                        default: 0.400,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
                             this.postProcessingEffects["brightnessContrastEffect"]
@@ -270,8 +270,8 @@
                         min: -1.000,
                         max: 1.000,
                         step: 0.001,
-                        value: 0.200,
-                        default: 0.200,
+                        value: 0.750,
+                        default: 0.750,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
                             this.postProcessingEffects["hueSaturationEffect"]
