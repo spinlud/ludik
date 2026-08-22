@@ -1,17 +1,72 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { useAppStore } from '@/stores/app'
+
+import Home from '@/components/home/Home.vue'
+import LatestNews from '@/components/home/latest-news/LatestNews.vue'
+import Albums from '@/components/home/albums/Albums.vue'
+import Singles from '@/components/home/singles/Singles.vue'
+import AboutPlaceholder from '@/views/AboutPlaceholder.vue'
+
+// The `scroll` flag travels as a query param (vue-router no longer forwards
+// params that are not part of the path) and is mapped to a boolean prop.
+const scrollProps = (route) => ({ scroll: route.query.scroll === 'true' })
 
 const routes = [
-  {
-    path: '/',
-    name: 'home',
-    component: HomeView,
-  },
+    {
+        // no name, default goes to LatestNews
+        path: '/',
+        component: Home,
+        children: [
+            {
+                path: '',
+                name: 'LatestNews',
+                component: LatestNews,
+                props: scrollProps
+            },
+            {
+                path: 'albums',
+                name: 'Albums',
+                component: Albums,
+                props: scrollProps
+            },
+            {
+                path: 'singles',
+                name: 'Singles',
+                component: Singles,
+                props: scrollProps
+            },
+            {
+                path: 'about',
+                name: 'About',
+                component: AboutPlaceholder,
+                props: scrollProps
+            },
+            {
+                path: ':pathMatch(.*)*',
+                redirect: { name: 'LatestNews' }
+            }
+        ]
+    },
+    {
+        path: '/:catchAll(.*)*',
+        redirect: '/'
+    }
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
-  routes,
+    history: createWebHistory(),
+    routes
+})
+
+router.beforeEach((to) => {
+
+    // if app is not initialized or home is in stop, redirect to root
+    const store = useAppStore()
+
+    if (to.path !== '/' && (!store.isAppInitialized || !store.isHomeVisible)) {
+        return '/'
+    }
+
 })
 
 export default router

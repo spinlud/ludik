@@ -1,0 +1,71 @@
+/*
+ * ---------------------------------------------------------------------------------------
+ * base.scss
+ * ---------------------------------------------------------------------------------------
+ */
+
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+
+  @include custom-scrollbar(.25em, darken($tundora, 10%), mix(darken($tundora, 10%), white, 50%));
+
+  // Problem on scrollbar...
+  @include firefox-only {
+    @include no-scroll-bar;
+  }
+
+}
+
+body {
+  min-height: 100%;
+  position: relative;
+
+  font-family: roboto-condensed, "Helvetica Neue", "Helvetica", "sans-serif";
+  font-style: normal;
+  font-weight: normal;
+  font-size: 1.2em;
+  color: lighten($silver-chalice2, 10%);
+  letter-spacing: 2px;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: none;
+
+  overscroll-behavior: contain; // to prevent pull to refresh on Android
+
+}
+
+body *
+{
+  text-shadow: none;
+}
+
+canvas {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  outline: none;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0); /* mobile webkit */
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.disable-hover {
+  pointer-events: none;
+}

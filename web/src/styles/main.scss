@@ -1,16 +1,13 @@
-// Global styles — proves Dart Sass compiles from an entrypoint import.
-$body-bg: #ffffff;
-$body-fg: #213547;
-$font-stack: system-ui, Avenir, Helvetica, Arial, sans-serif;
+/*
+ * ---------------------------------------------------------------------------------------
+ * main.scss
+ *
+ * Global styles entrypoint. The shared helpers (variables / colors / mixins) are injected
+ * into every stylesheet via Vite's `css.preprocessorOptions.scss.additionalData`.
+ * ---------------------------------------------------------------------------------------
+ */
 
-:root {
-  color-scheme: light dark;
-}
-
-body {
-  margin: 0;
-  padding: 2rem;
-  font-family: $font-stack;
-  background: $body-bg;
-  color: $body-fg;
-}
+@import "base/reset";
+@import "base/base";
+@import "base/typography";
+@import "home";
