@@ -1,0 +1,16 @@
+// Global styles — proves Dart Sass compiles from an entrypoint import.
+$body-bg: #ffffff;
+$body-fg: #213547;
+$font-stack: system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 2rem;
+  font-family: $font-stack;
+  background: $body-bg;
+  color: $body-fg;
+}
