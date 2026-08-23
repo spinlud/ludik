@@ -125,6 +125,9 @@
         na: "NA"
     }
 
+    // Scale factor approximating the pre-r155 (non physically-correct) lighting model for direct lights
+    const LEGACY_LIGHT_INTENSITY_SCALE = Math.PI
+
     export default {
 
         name: "World",
@@ -774,13 +777,13 @@
 
                 // // load skyboxes on gpu
                 // for (const skybox of this.skyboxes) {
-                //     skybox.encoding = THREE.sRGBEncoding
+                //     skybox.colorSpace = THREE.SRGBColorSpace
                 //     this.scene.background = skybox
                 // }
 
                 this.skyboxIndex = 0
 
-                this.skyboxes[this.skyboxIndex].encoding = THREE.sRGBEncoding
+                this.skyboxes[this.skyboxIndex].colorSpace = THREE.SRGBColorSpace
                 this.scene.background = this.skyboxes[this.skyboxIndex]
                 this.scene.visible = true
 
@@ -795,14 +798,14 @@
 
                 const addAmbientLight = () => {
 
-                    const ambientLight = new THREE.AmbientLight(ambientColor, 0.4)
+                    const ambientLight = new THREE.AmbientLight(ambientColor, 0.4 * LEGACY_LIGHT_INTENSITY_SCALE)
                     this.scene.add(ambientLight)
 
                 }
 
                 const addDirectionalLight = () => {
 
-                    const directionalLight = new THREE.DirectionalLight(ambientColor, 0.12)
+                    const directionalLight = new THREE.DirectionalLight(ambientColor, 0.12 * LEGACY_LIGHT_INTENSITY_SCALE)
                     const position = new THREE.Vector3(0, 14, 68)
                     position.applyQuaternion(this.level.quaternion) // apply level rotation to light
                     directionalLight.position.set(position.x, position.y, position.z)
@@ -3560,7 +3563,6 @@
                 this.renderer.shadowMap.enabled = false
                 this.renderer.shadowMapSoft = true
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
-                // TODO(#85): color management re-tune
                 this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
