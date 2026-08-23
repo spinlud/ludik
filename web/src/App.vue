@@ -46,6 +46,7 @@
         }
 
         z-index: -1;
+        pointer-events: none;
     }
 
     @keyframes animate-stars {

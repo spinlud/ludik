@@ -3700,6 +3700,7 @@
                     case states.world.start:
                         world.style.opacity = 1
                         world.style.display = "block"
+                        world.style.pointerEvents = "auto"
                         !this.isTouchDevice && this.controls ? this.controls.lock({startWebGL: true}) : this.startWebGL()
                         this.displayConsoleMessage() // Runs only once at start
                         this.store.changeAppState(states.app.idle)
@@ -3709,6 +3710,7 @@
                         !this.isTouchDevice && this.controls ? this.controls.unlock({stopWebGL: true}) : this.stopWebGL()
                         world.style.opacity = 0
                         world.style.display = "none"
+                        world.style.pointerEvents = "none"
                         break
 
                 }
@@ -3769,6 +3771,7 @@
         height: 100vh;
         background-color: #000;
         opacity: 0;
+        pointer-events: none;
     }
 
     #worldConsole {
