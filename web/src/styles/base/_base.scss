@@ -24,6 +24,13 @@ html, body {
 
 }
 
+html {
+  // Overscroll containment belongs on the actual scroll container (html), not body:
+  // body is a content-sized overflow-y:auto container, so `contain` there traps wheel
+  // scrolling and stops it chaining to html. This also keeps pull-to-refresh disabled.
+  overscroll-behavior-y: contain;
+}
+
 body {
   min-height: 100%;
   position: relative;
@@ -38,8 +45,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: none;
-
-  overscroll-behavior: contain; // to prevent pull to refresh on Android
 
 }
 
