@@ -7,6 +7,9 @@
 "use strict"
 
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { TTFLoader } from 'three/addons/loaders/TTFLoader.js'
+import { FontLoader } from 'three/addons/loaders/FontLoader.js'
 
 export default class LoaderManager extends THREE.EventDispatcher {
 
@@ -64,9 +67,9 @@ export default class LoaderManager extends THREE.EventDispatcher {
         this.cubeTextureLoader = LoaderManager.promisifyLoader(new THREE.CubeTextureLoader(this.manager))
         this.audioLoader = LoaderManager.promisifyLoader(new THREE.AudioLoader(this.manager))
 
-        // TODO(#84): restore GLTFLoader / FontLoader / TTFLoader from three/examples/jsm
-        // and their promisified wrappers (this.gltfLoader, this.fontLoader, this.ttfLoader)
-        // once asset loading is wired back up.
+        this.gltfLoader = LoaderManager.promisifyLoader(new GLTFLoader(this.manager))
+        this.ttfLoader = LoaderManager.promisifyLoader(new TTFLoader(this.manager))
+        this.fontLoader = LoaderManager.promisifyLoader(new FontLoader(this.manager))
     }
 
     /**
