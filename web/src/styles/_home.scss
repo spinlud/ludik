@@ -6,6 +6,10 @@
  * ---------------------------------------------------------------------------------------
  */
 
+@use "helpers/variables" as *;
+@use "helpers/colors" as *;
+@use "helpers/mixins" as *;
+
 $home-font-size: 1.1em;
 $home-line-height: 1.5em;
 $home-font-color: lighten($silver-chalice2, 10%);

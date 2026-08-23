@@ -7,7 +7,7 @@
  * ---------------------------------------------------------------------------------------
  */
 
-@import "base/reset";
-@import "base/base";
-@import "base/typography";
-@import "home";
+@use "base/reset";
+@use "base/base";
+@use "base/typography";
+@use "home";

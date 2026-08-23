@@ -4,6 +4,8 @@
  * ---------------------------------------------------------------------------------------
  */
 
+@use "variables" as *;
+
 @mixin media($min, $pixel-ratio: 1, $orientation: false) {
   @media only screen and (min-width: $min) and (-webkit-min-device-pixel-ratio: $pixel-ratio) {
     @content

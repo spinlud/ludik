@@ -173,11 +173,8 @@
 
 <style scoped lang="scss">
 
-    @import "../../styles/base/reset";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
+    @use "../../styles/base/reset";
+    @use "../../styles/base/typography";
 
     #loading {
         position: fixed;

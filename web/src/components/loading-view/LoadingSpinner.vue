@@ -20,8 +20,6 @@
 
 <style scoped lang="scss">
 
-    @import "../../styles/helpers/colors";
-
     .scifi-loader{
         list-style: none;
         padding: 0;

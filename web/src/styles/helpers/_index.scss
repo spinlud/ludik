@@ -1,0 +1,12 @@
+/*
+ * ---------------------------------------------------------------------------------------
+ * _index.scss
+ *
+ * Aggregates the shared helpers so a single `@use "helpers"` exposes variables,
+ * colors and mixins.
+ * ---------------------------------------------------------------------------------------
+ */
+
+@forward "variables";
+@forward "colors";
+@forward "mixins";

@@ -3741,12 +3741,9 @@
 
 <style scoped lang="scss">
 
-    @import "../../styles/base/reset";
-    @import "../../styles/base/base";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
+    @use "../../styles/base/reset";
+    @use "../../styles/base/base";
+    @use "../../styles/base/typography";
 
     canvas {
         display: block;

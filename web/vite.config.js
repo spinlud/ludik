@@ -19,9 +19,7 @@ export default defineConfig({
         // Inject the shared SCSS helpers into every stylesheet so components
         // can use variables, colors and mixins without importing them.
         additionalData: `@use "sass:math";
-@import "helpers/variables";
-@import "helpers/colors";
-@import "helpers/mixins";
+@use "helpers" as *;
 `,
       },
     },
