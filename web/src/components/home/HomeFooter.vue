@@ -15,6 +15,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     #homeFooter {
         display: flex;
@@ -32,7 +33,7 @@
                         20deg,
                         rgba($scifi-cyan-hover, 0.1) 0%,
                         rgba($scifi-cyan-hover, 0.1) 35%,
-                        rgba(lighten($scifi-cyan-hover, 70), 0.3) 45%,
+                        rgba(color.adjust($scifi-cyan-hover, $lightness: 70%), 0.3) 45%,
                         rgba($scifi-cyan-hover, 0.1) 55%,
                         rgba($scifi-cyan-hover, 0.1) 100%
         );

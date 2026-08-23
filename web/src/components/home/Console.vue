@@ -177,6 +177,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     #homeConsole {
         position: relative;
@@ -188,7 +189,7 @@
                         20deg,
                         rgba($scifi-cyan-hover, 0.1) 0%,
                         rgba($scifi-cyan-hover, 0.1) 35%,
-                        rgba(lighten($scifi-cyan-hover, 70), 0.3) 45%,
+                        rgba(color.adjust($scifi-cyan-hover, $lightness: 70%), 0.3) 45%,
                         rgba($scifi-cyan-hover, 0.1) 55%,
                         rgba($scifi-cyan-hover, 0.1) 100%
         );
@@ -207,7 +208,7 @@
     .home-console-text {
         font-size: 1em;
         line-height: 1.2em;
-        color: lighten($scifi-cyan-hover, 35);
+        color: color.adjust($scifi-cyan-hover, $lightness: 35%);
         text-align: left;
         text-justify: none;
     }

@@ -10,6 +10,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     #homeHeader {
         display: flex;
@@ -28,7 +29,7 @@
         font-family: neuropol, "Helvetica Neue", "Helvetica", sans-serif;
         font-size: 6em;
         letter-spacing: 0.25em;
-        color: lighten($scifi-cyan-hover, 40%);
+        color: color.adjust($scifi-cyan-hover, $lightness: 40%);
         text-shadow:
             0 0 8px $scifi-cyan-hover,
             0 0 24px $scifi-cyan-hover;

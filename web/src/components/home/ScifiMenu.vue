@@ -48,6 +48,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     #scifiMenu {
         position: relative;
@@ -58,7 +59,7 @@
         width: 1px;
         height: 100%;
         background: $scifi-cyan-hover;
-        @include box-shadow(0, 0, 4px, lighten($scifi-cyan-hover, 30%));
+        @include box-shadow(0, 0, 4px, color.adjust($scifi-cyan-hover, $lightness: 30%));
     }
 
     #verticalLineLeft {

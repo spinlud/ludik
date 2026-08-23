@@ -103,6 +103,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     .album-li {
         display: block;
@@ -141,7 +142,7 @@
         padding-right: 1em;
         padding-bottom: $home-wide-padding;
         width: 100%;
-        color: lighten($silver-chalice2, 10%);
+        color: color.adjust($silver-chalice2, $lightness: 10%);
         background: black;
 
         .album-title {
@@ -170,8 +171,8 @@
             color: $scifi-cyan-hover;
 
             &:hover {
-                color: lighten($scifi-cyan-hover, 60%);
-                text-shadow: 0 0 2px lighten($scifi-cyan-hover, 60%);
+                color: color.adjust($scifi-cyan-hover, $lightness: 60%);
+                text-shadow: 0 0 2px color.adjust($scifi-cyan-hover, $lightness: 60%);
             }
         }
     }

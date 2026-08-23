@@ -96,6 +96,7 @@
 </script>
 
 <style scoped lang="scss">
+    @use "sass:color";
 
     svg {
         display: block;
@@ -115,17 +116,17 @@
         }
 
         &:hover .ring {
-            stroke: lighten($scifi-cyan-hover, 30%) !important;
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 30%) !important;
             filter: url(#glow);
         }
 
         &:hover .st0 {
-            stroke: lighten($scifi-cyan-hover, 50%) !important;
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 50%) !important;
             animation-play-state: running;
         }
 
         &:hover .svg-text {
-            stroke: lighten($scifi-cyan-hover, 60%);
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 60%);
             filter: url(#glow);
         }
     }
@@ -137,7 +138,7 @@
     }
 
     .st0 {
-        stroke: lighten($scifi-cyan-hover, 15%);
+        stroke: color.adjust($scifi-cyan-hover, $lightness: 15%);
         stroke-dasharray: 12.1947,12.1947,12.1947,12.1947,12.1947,12.1947;
 
         animation-name: spin;
@@ -178,7 +179,7 @@
         margin: auto;
         font-size: 4em;
         font-family: neuropol;
-        fill: lighten($scifi-cyan-hover, 40%);
+        fill: color.adjust($scifi-cyan-hover, $lightness: 40%);
     }
 
 </style>

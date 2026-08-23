@@ -9,10 +9,11 @@
 @use "helpers/variables" as *;
 @use "helpers/colors" as *;
 @use "helpers/mixins" as *;
+@use "sass:color";
 
 $home-font-size: 1.1em;
 $home-line-height: 1.5em;
-$home-font-color: lighten($silver-chalice2, 10%);
+$home-font-color: color.adjust($silver-chalice2, $lightness: 10%);
 
 .home-root {
   margin: $home-wide-padding;
@@ -70,8 +71,8 @@ $home-font-color: lighten($silver-chalice2, 10%);
   color: $scifi-cyan-hover;
 
   &:hover {
-    color: lighten($scifi-cyan-hover, 60%);
-    text-shadow: 0 0 2px lighten($scifi-cyan-hover, 60%);
+    color: color.adjust($scifi-cyan-hover, $lightness: 60%);
+    text-shadow: 0 0 2px color.adjust($scifi-cyan-hover, $lightness: 60%);
   }
 }
 

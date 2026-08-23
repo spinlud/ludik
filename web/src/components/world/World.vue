@@ -3744,6 +3744,7 @@
     @use "../../styles/base/reset";
     @use "../../styles/base/base";
     @use "../../styles/base/typography";
+    @use "sass:color";
 
     canvas {
         display: block;
@@ -3794,7 +3795,7 @@
         width: 100%;
         font-size: 0.8em;
         font-family: roboto-condensed;
-        color: lighten($scifi-cyan-hover, 35);
+        color: color.adjust($scifi-cyan-hover, $lightness: 35%);
     }
 
     #pbarContainer {
@@ -3974,7 +3975,7 @@
                     appearance: none;
                     width: 1.6em;
                     height: 1.6em;
-                    background: lighten($scifi-cyan-hover, 50);
+                    background: color.adjust($scifi-cyan-hover, $lightness: 50%);
                     cursor: pointer;
                     @include border-radius(0.8em);
                 }
@@ -3982,7 +3983,7 @@
                 .commandpanel-row-slider::-moz-range-thumb {
                     width: 1.6em;
                     height: 1.6em;
-                    background: lighten($scifi-cyan-hover, 50);
+                    background: color.adjust($scifi-cyan-hover, $lightness: 50%);
                     cursor: pointer;
                     @include border-radius(0.8em);
                 }
@@ -4048,7 +4049,7 @@
                         width: 24px;
                         left: 2px;
                         bottom: 2px;
-                        background-color: lighten($scifi-cyan-hover, 50);
+                        background-color: color.adjust($scifi-cyan-hover, $lightness: 50%);
                         @include border-radius(13px);
                         @include transition(.4s);
                     }

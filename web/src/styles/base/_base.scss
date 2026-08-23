@@ -6,6 +6,7 @@
 
 @use "helpers/colors" as *;
 @use "helpers/mixins" as *;
+@use "sass:color";
 
 *, *:before, *:after {
   box-sizing: border-box;
@@ -15,7 +16,7 @@ html, body {
   max-width: 100%;
   overflow-x: hidden;
 
-  @include custom-scrollbar(.25em, darken($tundora, 10%), mix(darken($tundora, 10%), white, 50%));
+  @include custom-scrollbar(.25em, color.adjust($tundora, $lightness: -10%), color.mix(color.adjust($tundora, $lightness: -10%), white, 50%));
 
   // Problem on scrollbar...
   @include firefox-only {
@@ -39,7 +40,7 @@ body {
   font-style: normal;
   font-weight: normal;
   font-size: 1.2em;
-  color: lighten($silver-chalice2, 10%);
+  color: color.adjust($silver-chalice2, $lightness: 10%);
   letter-spacing: 2px;
 
   -webkit-font-smoothing: antialiased;
