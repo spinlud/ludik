@@ -3,6 +3,7 @@
         <div id="fixedBackground"></div>
         <mmenu v-show="isHomeVisible"></mmenu>
         <icons-sidebar></icons-sidebar>
+        <world></world>
         <router-view></router-view>
     </div>
 </template>
@@ -13,6 +14,7 @@
     import { useAppStore } from "@/stores/app"
     import Mmenu from "@/components/mmenu/Mmenu.vue"
     import IconsSidebar from "@/components/icons-sidebar/IconsSidebar.vue"
+    import World from "@/components/world/World.vue"
 
     const store = useAppStore()
 
