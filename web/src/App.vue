@@ -3,6 +3,7 @@
         <div id="fixedBackground"></div>
         <mmenu v-show="isHomeVisible"></mmenu>
         <icons-sidebar></icons-sidebar>
+        <load-view v-show="isAppLoading"></load-view>
         <world></world>
         <router-view></router-view>
     </div>
@@ -10,15 +11,25 @@
 
 <script setup>
 
-    import { computed } from "vue"
+    import { computed, watch } from "vue"
     import { useAppStore } from "@/stores/app"
+    import { states } from "@/stores/storeUtils"
     import Mmenu from "@/components/mmenu/Mmenu.vue"
     import IconsSidebar from "@/components/icons-sidebar/IconsSidebar.vue"
+    import LoadView from "@/components/loading-view/LoadingView.vue"
     import World from "@/components/world/World.vue"
 
     const store = useAppStore()
 
     const isHomeVisible = computed(() => store.isHomeVisible)
+    const isAppLoading = computed(() => store.isAppLoading)
+
+    // When the World stops (e.g. after the stargate teleport), bring the Home view back.
+    watch(() => store.worldState, (newVal) => {
+        if (newVal === states.world.stop) {
+            store.changeHomeState(states.home.start)
+        }
+    })
 
 </script>
 

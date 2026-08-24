@@ -3,7 +3,7 @@
 <!--        <loading-spinner></loading-spinner>-->
 
         <div class="blur-text-container">
-            <div id="loadingText">
+            <div id="loadingText" ref="loadingText">
                 <span class="blur-text">L</span>
                 <span class="blur-text">O</span>
                 <span class="blur-text">A</span>
@@ -13,7 +13,7 @@
                 <span class="blur-text">G</span>
             </div>
 
-            <div id="startText" style="display: none;">
+            <div id="startText" ref="startText" style="display: none;">
                 <span class="blur-text">C</span>
                 <span class="blur-text">L</span>
                 <span class="blur-text">I</span>
@@ -93,13 +93,32 @@
 
             fadeOutLoadingText (time) {
                 return new Promise(resolve => {
-                    $("#loadingText").fadeOut(time || 1000, resolve)
+                    const el = this.$refs.loadingText
+                    const animation = el.animate(
+                        [{ opacity: 1 }, { opacity: 0 }],
+                        { duration: time || 1000, fill: "forwards" }
+                    )
+                    animation.onfinish = () => {
+                        el.style.opacity = "0"
+                        el.style.display = "none"
+                        resolve()
+                    }
                 })
             },
 
             fadeInStartText (time) {
                 return new Promise(resolve => {
-                    $("#startText").fadeIn(time || 1000, resolve)
+                    const el = this.$refs.startText
+                    el.style.display = "block"
+                    el.style.opacity = "0"
+                    const animation = el.animate(
+                        [{ opacity: 0 }, { opacity: 1 }],
+                        { duration: time || 1000, fill: "forwards" }
+                    )
+                    animation.onfinish = () => {
+                        el.style.opacity = "1"
+                        resolve()
+                    }
                 })
             }
 
@@ -144,8 +163,10 @@
                         // hide startText and display loadingText
                         setTimeout(() => {
 
-                            $("#startText").css({opacity: 0, display: "none"})
-                            $("#loadingText").css({opacity: 1, display: "block"})
+                            this.$refs.startText.style.opacity = "0"
+                            this.$refs.startText.style.display = "none"
+                            this.$refs.loadingText.style.opacity = "1"
+                            this.$refs.loadingText.style.display = "block"
 
                         }, 1000)
 

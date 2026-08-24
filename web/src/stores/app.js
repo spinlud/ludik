@@ -2,9 +2,10 @@
  * ---------------------------------------------------------------------------------------
  * app store
  *
- * Ported from the Vuex 3 store. The state machine drives the 3D World intro / Home
- * visibility. While the World is stubbed, the app boots directly into the visible Home
- * view: `appState` starts idle (initialized) and `homeState` starts at `start`.
+ * The state machine drives the 3D World intro / Home visibility. The app boots into the
+ * loading view while the World loads its assets: `appState` starts at `loading` and
+ * `homeState` starts at `stop`, so the Home view stays hidden until the user exits the
+ * World.
  * ---------------------------------------------------------------------------------------
  */
 
@@ -14,9 +15,9 @@ import { states } from './storeUtils'
 
 export const useAppStore = defineStore('app', () => {
 
-    // Boot directly into the visible Home view while the 3D World intro is stubbed.
-    const appState = ref(states.app.idle)
-    const homeState = ref(states.home.start)
+    // Boot into the loading view; the Home view is revealed only when the World stops.
+    const appState = ref(states.app.loading)
+    const homeState = ref(states.home.stop)
     const worldState = ref(states.world.stop)
 
     const isAppInitialized = computed(
