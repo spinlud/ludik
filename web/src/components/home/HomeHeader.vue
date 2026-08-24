@@ -7,6 +7,17 @@
     import { onMounted, onBeforeUnmount, ref, watch } from "vue"
     import * as THREE from "three"
     import { TextGeometry } from "three/addons/geometries/TextGeometry.js"
+    import {
+        BloomEffect,
+        BrightnessContrastEffect,
+        GlitchEffect,
+        ChromaticAberrationEffect,
+        RenderPass,
+        EffectPass,
+        EffectComposer,
+        BlendFunction
+    }
+        from "postprocessing"
     import { useAppStore } from "@/stores/app"
     import { states } from "@/stores/storeUtils"
     import EventManager from "../shared/EventManager"
@@ -19,6 +30,7 @@
     let scene = null
     let camera = null
     let renderer = null
+    let composer = null
     let clock = null
     let eventManager = null
     let loaderManager = null
@@ -93,6 +105,65 @@
     }
 
     /**
+     * Build the postprocessing pipeline: brightness/contrast, bloom and glitch.
+     */
+    function initPostProcessing () {
+
+        const createBrightnessContrastEffect = () => {
+
+            return new BrightnessContrastEffect({
+                brightness: -0.722,
+                contrast: -0.33
+            })
+
+        }
+
+        const createGlitchEffect = () => {
+
+            const chromaticAberrationEffect = new ChromaticAberrationEffect()
+
+            const glitchEffect = new GlitchEffect({
+                chromaticAberrationOffset: chromaticAberrationEffect.offset
+            })
+
+            glitchEffect.delay.set(4, 10) // min/max delay
+            glitchEffect.duration.set(0.2, 1.0) // min/max duration
+
+            return glitchEffect
+
+        }
+
+        const createBloomEffect = () => {
+
+            return new BloomEffect({
+                blendFunction: BlendFunction.ADD,
+                luminanceThreshold: 1.0,
+                intensity: 6.3,
+                mipmapBlur: true,
+                resolutionScale: 0.95
+            })
+
+        }
+
+        const renderPass = new RenderPass(scene, camera)
+        renderPass.renderToScreen = false
+        renderPass.clear = true
+
+        const effectPass = new EffectPass(
+            camera,
+            createBrightnessContrastEffect(),
+            createBloomEffect(),
+            createGlitchEffect()
+        )
+
+        effectPass.renderToScreen = true
+
+        composer.addPass(renderPass)
+        composer.addPass(effectPass)
+
+    }
+
+    /**
      * Initialize the WebGL context and the 3D header.
      * @returns {Promise<void>}
      */
@@ -111,16 +182,15 @@
         renderer.setPixelRatio(window.devicePixelRatio)
         container.value.appendChild(renderer.domElement)
 
+        composer = new EffectComposer(renderer)
+
         clock = new THREE.Clock()
 
         eventManager = new EventManager()
         loaderManager = new LoaderManager(1)
 
         await create3DText()
-
-        // TODO(#81): restore Bloom/Glitch/ChromaticAberration postprocessing
-        // (EffectComposer + RenderPass + EffectPass) here. The hero currently
-        // renders straight to screen, so the neon glow is deferred to #81.
+        initPostProcessing()
 
         renderer.compile(scene, camera)
         eventManager.addDomEvent(window, "resize", onWindowResize)
@@ -140,7 +210,7 @@
             delta = clock.getDelta()
             elapsed = clock.elapsedTime
             fnlp.forEach(f => f(elapsed, delta))
-            renderer.render(scene, camera)
+            composer.render()
             requestAnimationId = requestAnimationFrame(animate)
 
         }
@@ -175,6 +245,7 @@
         camera.updateProjectionMatrix()
 
         renderer && renderer.setSize(width, height)
+        composer && composer.setSize(width, height)
 
     }
 

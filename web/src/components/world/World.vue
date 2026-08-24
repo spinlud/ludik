@@ -76,43 +76,42 @@
     import { MyDeviceOrientationControls } from "../shared/MyDeviceOrientationControls"
     import { MyPointerLockControls } from "../shared/MyPointerLockControls.js"
 
-    // TODO(#81): restore three-pathfinding
-    // import { Pathfinding, PathfindingHelper } from "three-pathfinding"
+    import { Pathfinding, PathfindingHelper } from "three-pathfinding"
 
-    // TODO(#81): restore postprocessing (EffectComposer / RenderPass / EffectPass / effects)
-    // import {
-    //     BloomEffect,
-    //     GodRaysEffect,
-    //     KernelSize,
-    //     BrightnessContrastEffect,
-    //     HueSaturationEffect,
-    //     SMAAEffect,
-    //     RenderPass,
-    //     EffectPass,
-    //     EffectComposer,
-    //     BlendFunction
-    // }
-    //     from "postprocessing"
+    import {
+        BloomEffect,
+        GodRaysEffect,
+        KernelSize,
+        BrightnessContrastEffect,
+        HueSaturationEffect,
+        SMAAEffect,
+        SMAAPreset,
+        EdgeDetectionMode,
+        RenderPass,
+        EffectPass,
+        EffectComposer,
+        BlendFunction
+    }
+        from "postprocessing"
 
-    // TODO(#81): restore three-nebula particle system
-    // import System, {
-    //     Emitter,
-    //     Rate,
-    //     Span,
-    //     Position,
-    //     Mass,
-    //     Body,
-    //     Radius,
-    //     Life,
-    //     VectorVelocity,
-    //     RadialVelocity,
-    //     PointZone,
-    //     Vector3D,
-    //     Alpha,
-    //     Scale,
-    //     Color,
-    //     SpriteRenderer
-    // } from "three-nebula"
+    import System, {
+        Emitter,
+        Rate,
+        Span,
+        Position,
+        Mass,
+        Body,
+        Radius,
+        Life,
+        VectorVelocity,
+        RadialVelocity,
+        PointZone,
+        Vector3D,
+        Alpha,
+        Scale,
+        Color,
+        SpriteRenderer
+    } from "three-nebula"
 
     const TAG = "[World]"
 
@@ -465,35 +464,12 @@
 
                 const createBloomEffect = () => {
 
-                    const bloomParams = [
-                        {
-                            name: "resolution",
-                            resolution: 0.7,
-                            min: 0.00,
-                            max: 1.00,
-                            cb: (v) => { bloomEffect.setResolutionScale(v) }
-                        },
-                        {
-                            name: "distinction",
-                            distinction: 1.0,
-                            min: 1.0,
-                            max: 10.0,
-                            cb: (v) => { bloomEffect.distinction = v }
-                        },
-                        {
-                            name: "opacity",
-                            opacity: 1.2,
-                            min: 0.0,
-                            max: 4.0,
-                            cb: (v) => { bloomEffect.blendMode.opacity.value = v }
-                        },
-                    ]
-
-                    const bloomEffect = new BloomEffect()
-                    bloomEffect.setResolutionScale(bloomParams[0].resolution)
-                    bloomEffect.distinction = bloomParams[1].distinction
-                    bloomEffect.blendMode.opacity.value = bloomParams[2].opacity
-                    // initDatGUI(bloomParams)
+                    const bloomEffect = new BloomEffect({
+                        luminanceThreshold: 1.0,
+                        intensity: 1.2,
+                        mipmapBlur: true,
+                        resolutionScale: 0.7
+                    })
 
                     return bloomEffect
 
@@ -586,7 +562,7 @@
 
                 const createHueSaturationEffect = () => {
 
-                    const hueSaturationEffect = new HueSaturationEffect(BlendFunction.NORMAL)
+                    const hueSaturationEffect = new HueSaturationEffect({ blendFunction: BlendFunction.NORMAL })
 
                     const params = [
                         {
@@ -617,19 +593,20 @@
 
                 }
 
-                const createSMAAEffect = async () => {
+                const createSMAAEffect = () => {
 
-                    const searchImage = await this.loaderManager.loadImage(SMAAEffect.searchImageDataURL)
-                    const areaImage = await this.loaderManager.loadImage(SMAAEffect.areaImageDataURL)
+                    const effect = new SMAAEffect({
+                        preset: SMAAPreset.MEDIUM,
+                        edgeDetectionMode: EdgeDetectionMode.COLOR
+                    })
 
-                    const effect =  new SMAAEffect(searchImage, areaImage)
-                    effect.setEdgeDetectionThreshold(0.065)
+                    effect.edgeDetectionMaterial.edgeDetectionThreshold = 0.065
 
                     return effect
 
                 }
 
-                const smaaEffect = await createSMAAEffect()
+                const smaaEffect = createSMAAEffect()
                 const bloomEffect = createBloomEffect()
                 const hueSaturationEffect = createHueSaturationEffect()
                 const brightnessContrastEffect = createBrightnessContrastEffect()
@@ -1489,12 +1466,6 @@
              */
             initTouchControls () {
 
-                // TODO(#81): touch navigation needs three-pathfinding
-                if (typeof Pathfinding === "undefined") {
-                    console.warn("Touch controls are disabled: three-pathfinding is not available yet (see #81).")
-                    return
-                }
-
                 const scope = this
 
                 const createHoledCircle = (color = 0x1EA4F9) => {
@@ -1858,7 +1829,6 @@
 
                     const brightnessTween = (value, time, onComplete) => {
 
-                        // TODO(#81): restore brightness tween once the postprocessing composer is back
                         if (!brightnessContrastEffect) {
                             return { start: () => {} }
                         }
@@ -1965,7 +1935,6 @@
                                 pbar.container.style.display = "none"
                                 pbar.inner.style.width = `0%`
                                 pbar.value.textContent = `0%`
-                                // TODO(#81): restore brightness tween once the postprocessing composer is back
                                 brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = brightnessDefault)
                                 this.isConsoleOpen = false
                                 this.isTransitionRunning = false
@@ -2649,7 +2618,7 @@
                 const system = new System()
                 const emitter1 = new Emitter()
                 const emitter2 = new Emitter()
-                const renderer = new SpriteRenderer(this.scene)
+                const renderer = new SpriteRenderer(this.scene, THREE)
 
                 const sprite = new THREE.Sprite(
                     new THREE.SpriteMaterial({
@@ -3358,8 +3327,7 @@
 
                 this.audioContext.resume() // await here causes pointer lock failure on safari/firefox
 
-                // TODO(#84): restore ambient audio gain tween once audio assets load.
-                // this.audioGlobalGainTween(1.0, 1000)
+                this.audioGlobalGainTween(1.0, 1000)
 
                 if (this.webGLRunning) {
                     console.log(TAG, "WebGL is already running")
@@ -3382,8 +3350,7 @@
                             }
                         })
                         this.renderer.info.reset()
-                        // TODO(#81): restore composer.render(this.deltaTime)
-                        this.renderer.render(this.scene, this.camera)
+                        this.composer.render()
                         requestAnimationFrame(animate)
 
                     }
@@ -3582,8 +3549,7 @@
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                // TODO(#81): restore composer = new EffectComposer(this.renderer)
-                this.composer = undefined
+                this.composer = new EffectComposer(this.renderer)
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
 
@@ -3665,13 +3631,8 @@
                 this.initSkyboxes()
                 await this.initLevel()
                 this.initLights()
-
-                // TODO(#81): restore three-nebula star particle system.
-                // this.initStarsParticleSystem()
-
-                // TODO(#81): restore postprocessing passes.
-                // await this.initPostProcessing()
-
+                this.initStarsParticleSystem()
+                await this.initPostProcessing()
                 this.initControls()
                 this.updatePlayerZone()
                 this.initUserInteractions()
@@ -3740,7 +3701,7 @@
 
         },
 
-        beforeDestroy () {
+        beforeUnmount () {
 
             this.eventManager.removeBusEvents()
             this.eventManager.removeDomEvents()

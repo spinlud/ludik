@@ -180,11 +180,11 @@
 
         },
 
-        beforeDestroy () {
+        beforeUnmount () {
 
             eventManager.removeBusEvents()
             eventManager.removeDomEvents()
-            console.log(TAG, "beforeDestroy")
+            console.log(TAG, "beforeUnmount")
 
         }
 
