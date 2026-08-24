@@ -116,23 +116,42 @@ function isInsidePolygon (nvert, vertX, vertY, testX, testY) {
 /**
  * Computes polygon data from rectangular mesh.
  *
+ * Builds the oriented rectangle in world space directly from the mesh local
+ * bounding box transformed by its world matrix. The world matrix already
+ * carries the level root rotation, so no additional rotation is applied.
+ *
  * @param obj3D Rectangular mesh in 3D space
- * @param quaternion Rotation to apply to polygon points
  * @returns {{vertY: *[], vertX: *[], nvert: number}} Polygon data
  */
-function polygonFromRect (obj3D, quaternion, scene) {
-    if (!obj3D instanceof THREE.Object3D) {
+function polygonFromRect (obj3D) {
+    if (!(obj3D instanceof THREE.Object3D)) {
         throw "Object must be instance of THREE.Object3D"
     }
 
-    // Create Box3 from object position, rotation and scale
-    const box = new THREE.Box3().setFromObject(obj3D)
+    // Resolve the mesh carrying the geometry (the trigger is a box mesh)
+    let mesh = obj3D
+    if (!mesh.geometry) {
+        obj3D.traverse(o => { if (!mesh.geometry && o.geometry) mesh = o })
+    }
+    if (!mesh.geometry) {
+        throw "Object must contain geometry"
+    }
 
-    // Extract vertices from bounding box and apply level rotation
-    const x1z1 = new THREE.Vector3(box.max.x, 0, box.max.z).applyQuaternion(quaternion)
-    const x2z2 = new THREE.Vector3(box.min.x, 0, box.min.z).applyQuaternion(quaternion)
-    const x1z2 = new THREE.Vector3(box.max.x, 0, box.min.z).applyQuaternion(quaternion)
-    const x2z1 = new THREE.Vector3(box.min.x, 0, box.max.z).applyQuaternion(quaternion)
+    // Make sure the world matrix is current
+    obj3D.updateWorldMatrix(true, true)
+
+    // Local-space bounding box of the rectangular mesh
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+    const box = mesh.geometry.boundingBox
+
+    // Rectangle corners in the mesh local frame, transformed to world space.
+    // The world matrix bakes in the level root rotation, producing the true
+    // oriented rectangle without any extra rotation.
+    const y = box.min.y
+    const x1z1 = new THREE.Vector3(box.max.x, y, box.max.z).applyMatrix4(mesh.matrixWorld)
+    const x2z2 = new THREE.Vector3(box.min.x, y, box.min.z).applyMatrix4(mesh.matrixWorld)
+    const x1z2 = new THREE.Vector3(box.max.x, y, box.min.z).applyMatrix4(mesh.matrixWorld)
+    const x2z1 = new THREE.Vector3(box.min.x, y, box.max.z).applyMatrix4(mesh.matrixWorld)
 
     return {
         nvert: 4,

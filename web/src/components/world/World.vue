@@ -2168,9 +2168,7 @@
                     const area1 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door1"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door1")
                         )
 
                         const doorLeft = this.scene.getObjectByName("Door_Left_1")
@@ -2381,9 +2379,7 @@
                     const area2 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door2"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door2")
                         )
 
                         const door = this.scene.getObjectByName("Door_Vert_2")
@@ -2504,9 +2500,7 @@
                     const area3 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door3"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door3")
                         )
 
                         const door = this.scene.getObjectByName("Door_Vert_3")
@@ -2741,11 +2735,11 @@
                 const stairway1 = this.scene.getObjectByName("PolyArea_Stairway1")
                 const stairway2 = this.scene.getObjectByName("PolyArea_Stairway2")
 
-                const corridorPoly = polygonFromRect(corridor, this.level.quaternion, this.scene)
-                const bridgePoly = polygonFromRect(bridge, this.level.quaternion, this.scene)
-                const stargatePoly = polygonFromRect(stargate, this.level.quaternion, this.scene)
-                const stairwayPoly1 = polygonFromRect(stairway1, this.level.quaternion, this.scene)
-                const stairwayPoly2 = polygonFromRect(stairway2, this.level.quaternion, this.scene)
+                const corridorPoly = polygonFromRect(corridor)
+                const bridgePoly = polygonFromRect(bridge)
+                const stargatePoly = polygonFromRect(stargate)
+                const stairwayPoly1 = polygonFromRect(stairway1)
+                const stairwayPoly2 = polygonFromRect(stairway2)
 
                 const playerPosition = this.controls.getObject().position
 
