@@ -350,7 +350,7 @@
                     this.consoleMessageDisplayed = true
                 }
 
-                const worldConsoleMessage = $("#worldConsoleMessage")
+                const worldConsoleMessage = document.getElementById("worldConsoleMessage")
                 const charTimeout = 40
                 const phraseTimeoutShort = 200 // , : ;
                 const phraseTimeoutLong = 1000 // . ! ?
@@ -380,13 +380,13 @@
 
                     // Cancel in case of another transition has been started (stargate)
                     if (this.isTransitionRunning) {
-                        worldConsoleMessage.html("")
+                        worldConsoleMessage.innerHTML = ""
                         return
                     }
 
                     let message = ""
                     let char
-                    worldConsoleMessage.html(message)
+                    worldConsoleMessage.innerHTML = message
 
                     for (let i = 0; i < phrase.length; ++i) {
 
@@ -403,7 +403,7 @@
                         sound.isPlaying && sound.stop()
                         sound.setBuffer(buffers[i % buffers.length])
                         !this.isTransitionRunning && char !== " " && sound.play()
-                        worldConsoleMessage.html(message)
+                        worldConsoleMessage.innerHTML = message
 
                         switch (char) {
 
@@ -442,7 +442,7 @@
 
                 // Cancel in case of another transition has been started (stargate)
                 if (this.isTransitionRunning) {
-                    worldConsoleMessage.html("")
+                    worldConsoleMessage.innerHTML = ""
                     return
                 }
 
@@ -452,7 +452,7 @@
 
                 // Wait for css transition close then reset console message
                 await wait(1000)
-                worldConsoleMessage.html("")
+                worldConsoleMessage.innerHTML = ""
 
             },
 
@@ -1489,6 +1489,12 @@
              */
             initTouchControls () {
 
+                // TODO(#81): touch navigation needs three-pathfinding
+                if (typeof Pathfinding === "undefined") {
+                    console.warn("Touch controls are disabled: three-pathfinding is not available yet (see #81).")
+                    return
+                }
+
                 const scope = this
 
                 const createHoledCircle = (color = 0x1EA4F9) => {
@@ -1806,7 +1812,7 @@
              */
             async initUserInteractions () {
 
-                const worldConsoleMessage = $("#worldConsoleMessage") // to hide in case of transition
+                const worldConsoleMessage = document.getElementById("worldConsoleMessage") // to hide in case of transition
                 const playerPosition = this.controls.getObject().position
 
                 const stargateInteraction = async () => {
@@ -1851,6 +1857,11 @@
                     let timeoutId
 
                     const brightnessTween = (value, time, onComplete) => {
+
+                        // TODO(#81): restore brightness tween once the postprocessing composer is back
+                        if (!brightnessContrastEffect) {
+                            return { start: () => {} }
+                        }
 
                         const from = {v: brightnessContrastEffect.uniforms.get("brightness").value}
                         const to = {v: value}
@@ -1932,7 +1943,7 @@
                     const startLoading = async () => {
 
                         this.isTransitionRunning = true
-                        worldConsoleMessage.hide()
+                        worldConsoleMessage.style.display = "none"
                         isLoading = true
                         this.isConsoleOpen = true
                         this.tweenGroupFXAudioFadeOut.removeAll()
@@ -1954,7 +1965,8 @@
                                 pbar.container.style.display = "none"
                                 pbar.inner.style.width = `0%`
                                 pbar.value.textContent = `0%`
-                                brightnessContrastEffect.uniforms.get("brightness").value = brightnessDefault
+                                // TODO(#81): restore brightness tween once the postprocessing composer is back
+                                brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = brightnessDefault)
                                 this.isConsoleOpen = false
                                 this.isTransitionRunning = false
                             }
@@ -2070,7 +2082,7 @@
                         }
 
                         this.isTransitionRunning = true
-                        worldConsoleMessage.hide()
+                        worldConsoleMessage.style.display = "none"
 
                         commandConsoleModuleEdges.visible = false
                         this.controls.enabled = false
@@ -2104,7 +2116,7 @@
                                 .to(to, tweenTimeMs)
                                 .easing(TWEEN.Easing.Quadratic.InOut)
                                 .onUpdate(() => {
-                                    THREE.Quaternion.slerp(qStart, qEnd, qTarget, from.t)
+                                    qTarget.slerpQuaternions(qStart, qEnd, from.t)
                                     this.controls.getObject().quaternion.set(qTarget.x, qTarget.y, qTarget.z, qTarget.w)
                                 })
                                 .onComplete(() => {
@@ -3360,7 +3372,15 @@
 
                         this.deltaTime = this.clock.getDelta()
                         this.elapsedTime = this.clock.elapsedTime
-                        this.fnlp.forEach(f => f(this.elapsedTime, this.deltaTime))
+                        // Catch per-callback errors so one failing per-frame callback
+                        // cannot kill the render loop (requestAnimationFrame still re-arms).
+                        this.fnlp.forEach(f => {
+                            try {
+                                f(this.elapsedTime, this.deltaTime)
+                            } catch (err) {
+                                console.error("World fnlp callback error:", err)
+                            }
+                        })
                         this.renderer.info.reset()
                         // TODO(#81): restore composer.render(this.deltaTime)
                         this.renderer.render(this.scene, this.camera)
@@ -3641,11 +3661,10 @@
                 // TODO(#84): restore renderer stats panel (threex.stats) once brought over.
                 // import.meta.env.DEV && this.initStatsRenderer()
 
-                // TODO(#84): restore asset loading and the scene it feeds.
-                // await this.loadAssets()
-                // this.initSkyboxes()
-                // await this.initLevel()
-                // this.initLights()
+                await this.loadAssets()
+                this.initSkyboxes()
+                await this.initLevel()
+                this.initLights()
 
                 // TODO(#81): restore three-nebula star particle system.
                 // this.initStarsParticleSystem()
@@ -3653,13 +3672,10 @@
                 // TODO(#81): restore postprocessing passes.
                 // await this.initPostProcessing()
 
-                // TODO(#84): restore player controls (depend on the loaded navmesh / level).
-                // this.initControls()
-                // this.updatePlayerZone()
-                // this.initUserInteractions()
-
-                // TODO(#84): restore ambient audio (depends on loaded audio assets).
-                // this.initAmbientAudio()
+                this.initControls()
+                this.updatePlayerZone()
+                this.initUserInteractions()
+                this.initAmbientAudio()
 
                 // FPS stats panel omitted: stats-js is not a dependency.
                 // this.initStatsFPS()
@@ -3716,12 +3732,11 @@
         async mounted () {
 
             await this.init()
-            this.store.changeWorldState(states.world.init)
 
-            // Parity gate: drive the render loop directly so the canvas renders on boot.
-            // The full worldState start/stop flow (pointer-lock gesture, intro) returns
-            // with the World interactions in #84.
-            this.startWebGL()
+            // The scene starts on user gesture: the worldState watcher's `start` branch
+            // acquires pointer lock (controls.lock -> requestPointerLock) which then calls
+            // startWebGL. Here we only move to the `init` state and wait for that gesture.
+            this.store.changeWorldState(states.world.init)
 
         },
 
