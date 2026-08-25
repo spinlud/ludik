@@ -25,6 +25,10 @@
 
     const store = useAppStore()
 
+    // Wide mipmap blur for a broad, soft bloom wash, mirroring the world scene.
+    const BLOOM_RADIUS = 0.95
+    const BLOOM_LEVELS = 8
+
     const container = ref(null)
 
     let scene = null
@@ -135,13 +139,20 @@
 
         const createBloomEffect = () => {
 
-            return new BloomEffect({
+            const bloomEffect = new BloomEffect({
                 blendFunction: BlendFunction.ADD,
-                luminanceThreshold: 1.0,
-                intensity: 6.3,
+                luminanceThreshold: 0.0,
+                luminanceSmoothing: 1.0,
+                intensity: 1.0,
                 mipmapBlur: true,
+                radius: BLOOM_RADIUS,
+                levels: BLOOM_LEVELS,
                 resolutionScale: 0.95
             })
+
+            bloomEffect.blendMode.opacity.value = 6.3
+
+            return bloomEffect
 
         }
 
@@ -182,7 +193,8 @@
         renderer.setPixelRatio(window.devicePixelRatio)
         container.value.appendChild(renderer.domElement)
 
-        composer = new EffectComposer(renderer)
+        // Half-float frame buffer to avoid banding in dark areas, mirroring the world scene.
+        composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType })
 
         clock = new THREE.Clock()
 

@@ -127,6 +127,26 @@
     // Scale factor approximating the pre-r155 (non physically-correct) lighting model for direct lights
     const LEGACY_LIGHT_INTENSITY_SCALE = Math.PI
 
+    // Ambient fill strength. Raised above the original 0.4 to lift walls and ceiling out of
+    // near-black, matching the evenly lit corridor of the reference render.
+    const AMBIENT_INTENSITY = 0.55
+
+    // Warm gold shared by all scene lights. Authored as a raw (linear) hex to match the pre-r152
+    // pipeline, which used code-set hex values directly. Modern ColorManagement would otherwise
+    // convert this warm tone from sRGB to linear, dimming and over-saturating it.
+    const LEGACY_WARM_LIGHT_HEX = 0xFFBF4D
+
+    // Bloom is weighted softly across the whole luminance range (no hard cutoff): a zero threshold
+    // with full smoothing reproduces the linear luminance weighting of the previous pipeline.
+    const BLOOM_LUMINANCE_THRESHOLD = 0.0
+    const BLOOM_LUMINANCE_SMOOTHING = 1.0
+    const BLOOM_RESOLUTION_SCALE = 0.7
+    // Wide mipmap blur to reproduce the broad, soft bloom wash of the previous convolution blur.
+    const BLOOM_RADIUS = 0.95
+    const BLOOM_LEVELS = 8
+    // Strength of the screen-blended bloom overlay.
+    const BLOOM_OPACITY = 1.2
+
     export default {
 
         name: "World",
@@ -465,11 +485,17 @@
                 const createBloomEffect = () => {
 
                     const bloomEffect = new BloomEffect({
-                        luminanceThreshold: 1.0,
-                        intensity: 1.2,
+                        blendFunction: BlendFunction.SCREEN,
+                        luminanceThreshold: BLOOM_LUMINANCE_THRESHOLD,
+                        luminanceSmoothing: BLOOM_LUMINANCE_SMOOTHING,
+                        intensity: 1.0,
                         mipmapBlur: true,
-                        resolutionScale: 0.7
+                        radius: BLOOM_RADIUS,
+                        levels: BLOOM_LEVELS,
+                        resolutionScale: BLOOM_RESOLUTION_SCALE
                     })
+
+                    bloomEffect.blendMode.opacity.value = BLOOM_OPACITY
 
                     return bloomEffect
 
@@ -509,7 +535,11 @@
                         clampMax: 1.0
                     })
 
-                    godRaysEffect.dithering = true
+                    // God-rays dithering is an anti-banding measure for 8-bit output; on this
+                    // HalfFloat composer its RGB-opposed dither survives unquantized and reads as
+                    // green/magenta speckle across dark surfaces. The float buffer has ample
+                    // precision, so banding does not return with it off.
+                    godRaysEffect.dithering = false
 
                     const params = [
                         {
@@ -771,11 +801,11 @@
              */
             initLights () {
 
-                const ambientColor = 0xFFBF4D
+                const ambientColor = new THREE.Color().setHex(LEGACY_WARM_LIGHT_HEX, THREE.LinearSRGBColorSpace)
 
                 const addAmbientLight = () => {
 
-                    const ambientLight = new THREE.AmbientLight(ambientColor, 0.4 * LEGACY_LIGHT_INTENSITY_SCALE)
+                    const ambientLight = new THREE.AmbientLight(ambientColor, AMBIENT_INTENSITY * LEGACY_LIGHT_INTENSITY_SCALE)
                     this.scene.add(ambientLight)
 
                 }
@@ -867,7 +897,7 @@
                     pointLight1.position.set(pivot.x, pivot.y, pivot.z)
                     pointLight1.translateZ(32)
 
-                    pointLight1.intensity = 0.5
+                    pointLight1.intensity = 0.5 * LEGACY_LIGHT_INTENSITY_SCALE
                     pointLight1.distance = 100
                     pointLight1.decay = 2
 
@@ -3549,7 +3579,9 @@
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                this.composer = new EffectComposer(this.renderer)
+                // Half-float frame buffer: removes banding in dark areas and lets the
+                // screen-blended bloom accumulate smoothly instead of clamping to 8-bit.
+                this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType })
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
 
