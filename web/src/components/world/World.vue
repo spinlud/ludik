@@ -535,6 +535,9 @@
                         luminanceThreshold: BLOOM_LUMINANCE_THRESHOLD,
                         luminanceSmoothing: BLOOM_LUMINANCE_SMOOTHING,
                         intensity: 1.0,
+                        // Disable the mipmap blur (default in 6.39.4) so the Kawase
+                        // LARGE blur runs, matching the vendored 6.3.2 original.
+                        mipmapBlur: false,
                         kernelSize: KernelSize.LARGE,
                         resolutionScale: BLOOM_RESOLUTION_SCALE
                     })
