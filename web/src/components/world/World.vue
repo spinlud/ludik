@@ -127,9 +127,24 @@
     // Scale factor approximating the pre-r155 (non physically-correct) lighting model for direct lights
     const LEGACY_LIGHT_INTENSITY_SCALE = Math.PI
 
-    // Ambient fill strength. Raised above the original 0.4 to lift walls and ceiling out of
-    // near-black, matching the evenly lit corridor of the reference render.
-    const AMBIENT_INTENSITY = 0.55
+    // Ambient fill strength: the original r104 ambient intensity carried over unchanged.
+    // The LEGACY_LIGHT_INTENSITY_SCALE (pi) factor applied below supplies the compensation for
+    // r155's physically-correct light units, so no further lift above the r104 value is needed.
+    const AMBIENT_INTENSITY = 0.4
+
+    // Command-room point light falloff, matched to the pre-r155 non-physical curve. r104 used
+    // falloff = (1 - d/distance)^decay, i.e. (1 - d/100)^2: nearly flat across a room and still
+    // significant far away (0.81 at d=10, 0.64 at d=20, 0.49 at d=30, 0.36 at d=40). This warm gold
+    // light (R-dominant) therefore washed the whole ship in a warm tint. Modern three uses a physical
+    // 1/d^decay curve, so the original decay=2 collapses this to near-zero within a few metres, which
+    // both darkens the command room and, by removing the R-dominant long-range wash, tilts distant
+    // corridors toward green. A low decay restores the flat, far-reaching old profile; the intensity
+    // is tuned (against the reference captures) so the command-room mean and the long-range corridor
+    // warmth both match the original. Intensity carries the r155 physically-correct-lights
+    // compensation (~pi) folded into the fitted value.
+    const POINT_LIGHT1_DISTANCE = 100
+    const POINT_LIGHT1_DECAY = 0.6
+    const POINT_LIGHT1_INTENSITY = 4.0
 
     // Warm gold shared by all scene lights. Authored as a raw (linear) hex to match the pre-r152
     // pipeline, which used code-set hex values directly. Modern ColorManagement would otherwise
@@ -140,12 +155,40 @@
     // with full smoothing reproduces the linear luminance weighting of the previous pipeline.
     const BLOOM_LUMINANCE_THRESHOLD = 0.0
     const BLOOM_LUMINANCE_SMOOTHING = 1.0
+    // Resolution scale of the Kawase blur render target.
     const BLOOM_RESOLUTION_SCALE = 0.7
-    // Wide mipmap blur to reproduce the broad, soft bloom wash of the previous convolution blur.
-    const BLOOM_RADIUS = 0.95
-    const BLOOM_LEVELS = 8
     // Strength of the screen-blended bloom overlay.
     const BLOOM_OPACITY = 1.2
+
+    // Output gamma matching three r104's gammaOutput/gammaFactor=2.2 encode.
+    const LEGACY_OUTPUT_GAMMA = 2.2
+
+    // Emulation of r104's gammaOutput/gammaFactor=2.2 output curve. r104 encoded the final image
+    // with a pure pow(1/2.2); three@0.185 instead uses the true sRGB OETF (a 1.055*pow(x,1/2.4)-0.055
+    // curve with a linear toe), which is substantially darker at low luminance and identical at high
+    // luminance. This replaces ONLY the sRGBTransferOETF function body in the colorspace_pars_fragment
+    // shader chunk with the legacy pure-gamma curve, restoring visual parity with the original build.
+    // It touches the ENCODE path only: sRGBTransferEOTF (sRGB texture decode) and LinearTransferOETF
+    // are left exactly as shipped, so texture color is unaffected (a prior attempt that also patched
+    // those corrupted sRGB decode and produced a green tint). This affects only the direct
+    // renderer.render() output encode; the postprocessing composer path does its own output encoding.
+    function applyLegacyOutputGamma () {
+
+        const chunk = THREE.ShaderChunk.colorspace_pars_fragment
+
+        const shippedOETFBody =
+            "return vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a );"
+
+        const legacyOETFBody = `return vec4( pow( value.rgb, vec3( 1.0 / ${LEGACY_OUTPUT_GAMMA} ) ), value.a );`
+
+        if (!chunk.includes(shippedOETFBody)) {
+            console.error(`${TAG} applyLegacyOutputGamma: expected sRGBTransferOETF body not found in colorspace_pars_fragment; leaving shader chunk untouched`)
+            return
+        }
+
+        THREE.ShaderChunk.colorspace_pars_fragment = chunk.replace(shippedOETFBody, legacyOETFBody)
+
+    }
 
     export default {
 
@@ -486,12 +529,13 @@
 
                     const bloomEffect = new BloomEffect({
                         blendFunction: BlendFunction.SCREEN,
+                        // Nearest 6.39.4 analogue of 6.3.2's distinction = 1.0: continuous
+                        // pow(luminance, 1) weighting with no threshold. The exact weighting
+                        // is not expressible in the new API.
                         luminanceThreshold: BLOOM_LUMINANCE_THRESHOLD,
                         luminanceSmoothing: BLOOM_LUMINANCE_SMOOTHING,
                         intensity: 1.0,
-                        mipmapBlur: true,
-                        radius: BLOOM_RADIUS,
-                        levels: BLOOM_LEVELS,
+                        kernelSize: KernelSize.LARGE,
                         resolutionScale: BLOOM_RESOLUTION_SCALE
                     })
 
@@ -507,7 +551,10 @@
                         map: await this.loaderManager.loadTexture("assets/textures/sun.png"),
                         size: 100,
                         sizeAttenuation: true,
-                        color: 0xffddaa,
+                        // Build the color bypassing ColorManagement: r104 fed the raw hex
+                        // into the shader, so ColorManagement's sRGB->linear conversion
+                        // would shift the rendered disc from pale yellow toward ocher.
+                        color: new THREE.Color().setHex(0xffddaa, THREE.LinearSRGBColorSpace),
                         alphaTest: 0,
                         transparent: true,
                         fog: false
@@ -535,11 +582,8 @@
                         clampMax: 1.0
                     })
 
-                    // God-rays dithering is an anti-banding measure for 8-bit output; on this
-                    // HalfFloat composer its RGB-opposed dither survives unquantized and reads as
-                    // green/magenta speckle across dark surfaces. The float buffer has ample
-                    // precision, so banding does not return with it off.
-                    godRaysEffect.dithering = false
+                    // The original's anti-banding dither for the 8-bit frame buffer.
+                    godRaysEffect.dithering = true
 
                     const params = [
                         {
@@ -897,9 +941,9 @@
                     pointLight1.position.set(pivot.x, pivot.y, pivot.z)
                     pointLight1.translateZ(32)
 
-                    pointLight1.intensity = 0.5 * LEGACY_LIGHT_INTENSITY_SCALE
-                    pointLight1.distance = 100
-                    pointLight1.decay = 2
+                    pointLight1.intensity = POINT_LIGHT1_INTENSITY
+                    pointLight1.distance = POINT_LIGHT1_DISTANCE
+                    pointLight1.decay = POINT_LIGHT1_DECAY
 
                     this.scene.add(pointLight1)
 
@@ -1204,6 +1248,34 @@
                 yawObject.position.set(startPoint.x, this.cameraOffsetY, startPoint.z)
                 yawObject.rotation.y = -this.level.rotation.y
                 this.scene.add(yawObject)
+
+                // The postprocessing chain is disabled by default pending its parity rework;
+                // ?fx boots with the composer active.
+                this.parityBypassComposer = !new URLSearchParams(window.location.search).has('fx')
+
+                // Parity-debug hook: teleport the camera, read its pose, locate the
+                // sun and toggle the postprocessing composer for A/B parity captures.
+                window.__ludikParity = {
+                    setPose: (x, y, z, pitch, yaw) => {
+                        this.controls.setPosition(x, y, z)
+                        this.controls.setRotation(pitch, yaw)
+                    },
+                    getPose: () => {
+                        const p = this.controls.getPosition()
+                        const r = this.controls.getRotation()
+                        return { x: p.x, y: p.y, z: p.z, pitch: r.x, yaw: r.y }
+                    },
+                    getSun: () => {
+                        const s = new THREE.Vector3(0, 0, 1000).applyQuaternion(this.level.quaternion)
+                        return { x: s.x, y: s.y, z: s.z }
+                    },
+                    setEffects: (enabled) => {
+                        this.parityBypassComposer = !enabled
+                    },
+                    setAxes: (visible) => {
+                        if (this.axesHelper) this.axesHelper.visible = visible
+                    },
+                }
 
                 this.controls.forward =  false
                 this.controls.backward =  false
@@ -3293,7 +3365,8 @@
              */
             initAxesHelper (size) {
 
-                this.scene.add(new THREE.AxesHelper(size || 100))
+                this.axesHelper = new THREE.AxesHelper(size || 100)
+                this.scene.add(this.axesHelper)
 
             },
 
@@ -3380,7 +3453,11 @@
                             }
                         })
                         this.renderer.info.reset()
-                        this.composer.render()
+                        if (this.parityBypassComposer) {
+                            this.renderer.render(this.scene, this.camera)
+                        } else {
+                            this.composer.render()
+                        }
                         requestAnimationFrame(animate)
 
                     }
@@ -3567,6 +3644,8 @@
                 this.webGLRunning = false
                 this.webGLStartRequested = false // async syncronization between start/stop
 
+                applyLegacyOutputGamma()
+
                 this.renderer = new THREE.WebGLRenderer({antialias: false, alpha: false})
                 this.renderer.setClearColor(0x000000)
                 this.renderer.setSize(this.width, this.height)
@@ -3579,9 +3658,8 @@
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                // Half-float frame buffer: removes banding in dark areas and lets the
-                // screen-blended bloom accumulate smoothly instead of clamping to 8-bit.
-                this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType })
+                // Default 8-bit frame buffer, matching the vendored postprocessing 6.3.2 original.
+                this.composer = new EffectComposer(this.renderer)
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
 
