@@ -52,7 +52,49 @@ node capture.js http://localhost:4173 migrated
 - **`#pointerLockOverlay` is a 0x0 element**, so Playwright visibility checks on it
   are useless as a readiness signal — rely on the fixed waits above instead.
 
+## Poses (`poses.json`)
+
+Named camera poses for A/B parity captures, applied via the in-app
+`window.__ludikParity` debug hook (`setPose(x, y, z, pitch, yaw)`). `pitch` is
+`pitchObject.rotation.x` (positive = look up), `yaw` is `yawObject.rotation.y`.
+
+The six poses were derived from the World scene's runtime state (read with
+`node capture.js <url> --probe`, which prints `getPose()` and `getSun()`):
+
+- **spawn** — the initial player pose. `getPose()` at world entry:
+  position `(-25.38, 2.6, 11.83)`, yaw `-1.1345`, pitch `0`. The yaw is
+  `-level.rotation.y`; eye height is `cameraOffsetY = 2.6`.
+- **sun** — looks at the sun. The sun sits at
+  `Vector3(0,0,1000).applyQuaternion(level.quaternion)` = `(906.3, 0, -422.6)`.
+  From spawn the bearing to the sun is `atan2(-(sx-px), -(sz-pz)) ≈ -1.1345` —
+  i.e. the player already faces the sun at spawn — so this pose reuses the spawn
+  position/yaw and pitches up `0.15` rad to frame the sun disc / god-rays.
+- **sky** — spawn position, pitch up `1.047` rad (~60°) so the frame is mostly
+  skybox (good for comparing skybox brightness/tint).
+- **interior** — the command-console rectangle. `COMMAND_CONSOLE_POLY` spans
+  local x `[-1.75, 2.26]`, z `[32, 34]` (centre local `(0.25, 0, 33)`);
+  transformed by the level's Y-rotation (θ=2.0 rad, the same rotation the sun
+  vector reveals) the centre is world `(29.8, ·, -14.2)`. Placed at eye height
+  `2.6`, pitch `0`, yaw turned into the interior (`spawn yaw + π ≈ 2.007`).
+- **exterior** — outside the ship looking back at it. Camera lifted above and
+  behind the hull (`(70, 25, -33)`), pitched down `-0.289` rad and yawed `2.011`
+  toward the ship, so the frame shows the ship silhouette against the skybox
+  (good for comparing hull shading and skybox tone together).
+- **sun-clear** — an unobstructed view of the sun disc, clear of corridor
+  geometry (`(60, 10, -28)`, pitch `-0.011`, yaw `-1.1345`, the spawn bearing to
+  the sun). Isolates the sun disc size/brightness and god-rays without walls in
+  the frame.
+
+Because both apps are near-identical ports of the same level, the same
+`poses.json` (world coordinates) applies to both.
+
 ## Comparing captures
+
+`node compare.js <dirA> <dirB>` prints, per matching PNG pair: mean absolute
+per-channel diff, RMSE, and per-quadrant mean luminance for each image so a
+"darker by X%" gap is quantifiable.
+
+
 
 Comparing dark-region crops numerically has been effective for spotting chroma-noise
 artifacts — e.g. take the std-dev of the red-minus-green channel difference over a
