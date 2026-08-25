@@ -1,0 +1,16 @@
+{
+  "name": "parity-harness",
+  "version": "1.0.0",
+  "description": "Visual-parity screenshot + console capture harness for the Ludik World scene",
+  "main": "capture.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}
