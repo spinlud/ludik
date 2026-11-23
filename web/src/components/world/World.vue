@@ -1206,7 +1206,9 @@
 
                         // Keep depthWrite on for transparent meshes (three.js #17706 turns it off for
                         // BLEND materials) so glass occludes what lies behind it, sun included.
-                        if (o.material && o.material.transparent) {
+                        // The translucent Glass_mod panes stay depth-free so the god-rays light pass
+                        // sees the sun through them.
+                        if (o.material && o.material.transparent && o.material.name !== "Glass_mod") {
                             o.material.depthWrite = true
                         }
 
