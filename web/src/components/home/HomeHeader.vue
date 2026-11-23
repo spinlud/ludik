@@ -15,7 +15,8 @@
         RenderPass,
         EffectPass,
         EffectComposer,
-        BlendFunction
+        BlendFunction,
+        KernelSize
     }
         from "postprocessing"
     import { useAppStore } from "@/stores/app"
@@ -25,9 +26,18 @@
 
     const store = useAppStore()
 
-    // Wide mipmap blur for a broad, soft bloom wash, mirroring the world scene.
-    const BLOOM_RADIUS = 0.95
-    const BLOOM_LEVELS = 8
+    // The header reproduces the original three r104 / postprocessing 6.3.2 pipeline, which had
+    // no color management: hex colors were used as-is, every effect ran on those raw values and
+    // the result reached the canvas without encoding. Material colors are therefore declared in
+    // the linear working space (no sRGB-to-linear conversion), the renderer does not encode, and
+    // the effects pass neither converts nor encodes. In a linear-light pipeline the blue
+    // wireframe drops to a fraction of its luminance and the bloom almost disappears.
+    const TEXT_FACE_COLOR = new THREE.Color().setHex(0x081446, THREE.LinearSRGBColorSpace)
+    const TEXT_WIRE_COLOR = new THREE.Color().setHex(0x1EA4F9, THREE.LinearSRGBColorSpace)
+
+    // Additive bloom strength, calibrated against a render of the original header
+    // (6.3 there, with a slightly weaker Kawase blur).
+    const BLOOM_OPACITY = 5.5
 
     const container = ref(null)
 
@@ -67,7 +77,7 @@
         const textGeometry = new TextGeometry("L U D I K", {
             font: font,
             size: 80,
-            height: 5,
+            depth: 5,
             curveSegments: 12,
             bevelEnabled: true,
             bevelThickness: 10,
@@ -80,11 +90,11 @@
         const textMaterial = [
 
             new THREE.MeshBasicMaterial({
-                color: 0x081446,
+                color: TEXT_FACE_COLOR,
                 wireframe: false,
             }),
             new THREE.MeshBasicMaterial({
-                color: 0x1EA4F9,
+                color: TEXT_WIRE_COLOR,
                 wireframe: true,
             }),
 
@@ -144,13 +154,13 @@
                 luminanceThreshold: 0.0,
                 luminanceSmoothing: 1.0,
                 intensity: 1.0,
-                mipmapBlur: true,
-                radius: BLOOM_RADIUS,
-                levels: BLOOM_LEVELS,
+                // Kawase LARGE blur, as in the original: a tight glow hugging the wireframe.
+                mipmapBlur: false,
+                kernelSize: KernelSize.LARGE,
                 resolutionScale: 0.95
             })
 
-            bloomEffect.blendMode.opacity.value = 6.3
+            bloomEffect.blendMode.opacity.value = BLOOM_OPACITY
 
             return bloomEffect
 
@@ -167,6 +177,8 @@
             createGlitchEffect()
         )
 
+        effectPass.effects.forEach(effect => { effect.inputColorSpace = null })
+        effectPass.fullscreenMaterial.encodeOutput = false
         effectPass.renderToScreen = true
 
         composer.addPass(renderPass)
@@ -187,7 +199,7 @@
         camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 4000)
 
         renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true })
-        renderer.outputColorSpace = THREE.SRGBColorSpace
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace
         renderer.setClearColor(0x000000, 0)
         renderer.setSize(width, height)
         renderer.setPixelRatio(window.devicePixelRatio)
