@@ -11,8 +11,6 @@
 @use "helpers/mixins" as *;
 @use "sass:color";
 
-$home-font-size: 1.1em;
-$home-line-height: 1.5em;
 $home-font-color: color.adjust($silver-chalice2, $lightness: 10%);
 
 .home-root {
