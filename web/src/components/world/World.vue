@@ -53,6 +53,7 @@
 
     import * as THREE from "three"
     import TWEEN from "@tweenjs/tween.js"
+    import STATS from "stats-js"
 
     import { states } from "@/stores/storeUtils"
     import { useAppStore } from "@/stores/app"
@@ -3910,8 +3911,7 @@
                 this.initUserInteractions()
                 this.initAmbientAudio()
 
-                // FPS stats panel omitted: stats-js is not a dependency.
-                // this.initStatsFPS()
+                this.initStatsFPS()
 
                 this.onWindowResize()
 
