@@ -5,7 +5,7 @@ import Home from '@/components/home/Home.vue'
 import LatestNews from '@/components/home/latest-news/LatestNews.vue'
 import Albums from '@/components/home/albums/Albums.vue'
 import Singles from '@/components/home/singles/Singles.vue'
-import AboutPlaceholder from '@/views/AboutPlaceholder.vue'
+import About from '@/components/home/about/About.vue'
 
 // The `scroll` flag travels as a query param (vue-router no longer forwards
 // params that are not part of the path) and is mapped to a boolean prop.
@@ -38,7 +38,7 @@ const routes = [
             {
                 path: 'about',
                 name: 'About',
-                component: AboutPlaceholder,
+                component: About,
                 props: scrollProps
             },
             {
