@@ -165,6 +165,9 @@
     // Resolution scale of the god-rays blur and ray targets.
     const GODRAYS_RESOLUTION_SCALE = 0.28
 
+    // Translucent level glass kept out of the depth buffer so the god-rays light pass sees the sun through it.
+    const GODRAYS_TRANSPARENT_MATERIAL = "Glass_mod"
+
     // Output gamma matching three r104's gammaOutput/gammaFactor=2.2 encode.
     const LEGACY_OUTPUT_GAMMA = 2.2
 
@@ -1207,9 +1210,9 @@
 
                         // Keep depthWrite on for transparent meshes (three.js #17706 turns it off for
                         // BLEND materials) so glass occludes what lies behind it, sun included.
-                        // The translucent Glass_mod panes stay depth-free so the god-rays light pass
+                        // The translucent glass panes stay depth-free so the god-rays light pass
                         // sees the sun through them.
-                        if (o.material && o.material.transparent && o.material.name !== "Glass_mod") {
+                        if (o.material && o.material.transparent && o.material.name !== GODRAYS_TRANSPARENT_MATERIAL) {
                             o.material.depthWrite = true
                         }
 
@@ -2046,12 +2049,18 @@
                         value: document.getElementById("pbarValue")
                     }
 
+                    const resetProgressBar = () => {
+                        pbar.container.style.display = "none"
+                        pbar.inner.style.width = `0%`
+                        pbar.value.textContent = `0%`
+                    }
+
                     const cylinderStargate = this.scene.getObjectByName("Cylinder_Stargate")
                     let cylinderStargateRotationStep = 0
 
                     const brightnessContrastEffect = this.postProcessingEffects["brightnessContrastEffect"]
                     // Brightness the scene returns to: the current Command Panel value
-                    const brightnessRestoreValue = () => this.commandPanelSliders.brightness.value
+                    const currentBrightness = () => this.commandPanelSliders.brightness.value
 
                     let isLoading = false
                     // False after a teleport or a WebGL stop until the player leaves the stargate zone
@@ -2187,9 +2196,7 @@
                             if (this.webGLRunning) {
                                 this.controls.disable()
                                 this.store.changeWorldState(states.world.stop)
-                                pbar.container.style.display = "none"
-                                pbar.inner.style.width = `0%`
-                                pbar.value.textContent = `0%`
+                                resetProgressBar()
                                 this.isConsoleOpen = false
                                 this.isTransitionRunning = false
                             }
@@ -2209,12 +2216,10 @@
                         this.tweenGroupStargate.removeAll()
                         this.audioFadeOut(stargateSound, fadeTime / 1000, 0, this.tweenGroupFXAudioFadeOut)
                         this.audioFadeOut(stargateCylinderSound, fadeTime / 1000 * 3, 0, this.tweenGroupFXAudioFadeOut)
-                        brightnessTween(brightnessRestoreValue(), fadeTime).start()
+                        brightnessTween(currentBrightness(), fadeTime).start()
                         stargateCylinderOpacityTween(0, loadTime / 4).start()
                         stargateCylinderRotationTween(-0.1, loadTime / 4).start()
-                        pbar.container.style.display = "none"
-                        pbar.inner.style.width = `0%`
-                        pbar.value.textContent = `0%`
+                        resetProgressBar()
 
                     }
 
@@ -2250,13 +2255,11 @@
                         stargateSound.setVolume(0)
                         stargateCylinderSound.isPlaying && stargateCylinderSound.stop()
                         stargateCylinderSound.setVolume(0)
-                        brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = brightnessRestoreValue())
+                        brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = currentBrightness())
                         cylinderStargate.material.opacity = 0
                         cylinderStargate.visible = false
                         cylinderStargateRotationStep = 0
-                        pbar.container.style.display = "none"
-                        pbar.inner.style.width = `0%`
-                        pbar.value.textContent = `0%`
+                        resetProgressBar()
                     }
 
                     const onWebGLStop = () => {

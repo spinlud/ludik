@@ -125,7 +125,7 @@
         stroke: color.adjust($scifi-cyan-hover, $lightness: 15%);
         stroke-dasharray: 12.1947,12.1947,12.1947,12.1947,12.1947,12.1947;
 
-        animation-name: spin;
+        animation-name: spin-ccw;
         animation-duration: 10000ms;
         animation-iteration-count: infinite;
         animation-timing-function: linear;
@@ -146,7 +146,7 @@
         stroke-linecap: square;
         stroke-dasharray: 120, 20, 110, 20, 140;
 
-        animation: spin 50s linear infinite;
+        animation: spin-ccw 50s linear infinite;
         transform-origin: 500px 500px;
     }
 
@@ -156,7 +156,7 @@
         stroke-linecap: square;
     }
 
-    @keyframes spin {
+    @keyframes spin-ccw {
         from {
             transform: rotate(0deg);
         }
