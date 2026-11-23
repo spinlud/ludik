@@ -47,26 +47,10 @@
         </circle>
 
         <!-- Inner ring -->
-        <circle class="ring st1" cx="500" cy="500" r="237.7">
-            <animateTransform attributeType="xml"
-                              attributeName="transform"
-                              type="rotate"
-                              from="0 500 500"
-                              to="360 500 500"
-                              dur="40s"
-                              repeatCount="indefinite"></animateTransform>
-        </circle>
+        <circle class="ring st1" cx="500" cy="500" r="237.7"></circle>
 
         <!-- Outer ring -->
-        <circle class="ring st2" cx="500" cy="500" r="366.8" transform="rotate(0 500 500)">
-            <animateTransform attributeType="xml"
-                              attributeName="transform"
-                              type="rotate"
-                              from="0 500 500"
-                              to="-360 500 500"
-                              dur="50s"
-                              repeatCount="indefinite"></animateTransform>
-        </circle>
+        <circle class="ring st2" cx="500" cy="500" r="366.8"></circle>
 
         <!-- Outer thin ring -->
         <circle class="ring st3" cx="500" cy="500" r="385.1"></circle>
@@ -152,12 +136,18 @@
     .st1 {
         stroke: $scifi-cyan-hover;
         stroke-dasharray: 50,90,200,30,40,0;
+
+        animation: spin-cw 40s linear infinite;
+        transform-origin: 500px 500px;
     }
 
     .st2 {
         stroke: $scifi-cyan-hover;
         stroke-linecap: square;
         stroke-dasharray: 120, 20, 110, 20, 140;
+
+        animation: spin 50s linear infinite;
+        transform-origin: 500px 500px;
     }
 
     .st3 {
@@ -172,6 +162,15 @@
         }
         to {
             transform: rotate(-360deg);
+        }
+    }
+
+    @keyframes spin-cw {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
         }
     }
 
