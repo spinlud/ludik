@@ -90,7 +90,8 @@
         RenderPass,
         EffectPass,
         EffectComposer,
-        BlendFunction
+        BlendFunction,
+        Effect
     }
         from "postprocessing"
 
@@ -160,6 +161,9 @@
     // Strength of the screen-blended bloom overlay.
     const BLOOM_OPACITY = 1.2
 
+    // Resolution scale of the god-rays blur and ray targets.
+    const GODRAYS_RESOLUTION_SCALE = 0.28
+
     // Output gamma matching three r104's gammaOutput/gammaFactor=2.2 encode.
     const LEGACY_OUTPUT_GAMMA = 2.2
 
@@ -170,8 +174,8 @@
     // shader chunk with the legacy pure-gamma curve, restoring visual parity with the original build.
     // It touches the ENCODE path only: sRGBTransferEOTF (sRGB texture decode) and LinearTransferOETF
     // are left exactly as shipped, so texture color is unaffected (a prior attempt that also patched
-    // those corrupted sRGB decode and produced a green tint). This affects only the direct
-    // renderer.render() output encode; the postprocessing composer path does its own output encoding.
+    // those corrupted sRGB decode and produced a green tint). This affects every draw encoded for the
+    // screen; the postprocessing chain encodes with LegacyGammaEncodeEffect instead (see below).
     function applyLegacyOutputGamma () {
 
         const chunk = THREE.ShaderChunk.colorspace_pars_fragment
@@ -187,6 +191,44 @@
         }
 
         THREE.ShaderChunk.colorspace_pars_fragment = chunk.replace(shippedOETFBody, legacyOETFBody)
+
+    }
+
+    // Postprocessing working space. r104 (gammaOutput + gammaFactor 2.2) gamma-encoded every
+    // render-target write, scene and god-rays light pass alike, into 8-bit buffers. So the original
+    // effects chain operated on gamma-encoded values clamped to [0, 1], and its final pass was a
+    // passthrough. The composer reproduces that: the scene renders linear, LegacyGammaEncodeEffect
+    // clamps and encodes right after it, every effect runs on the encoded values with no color
+    // space conversions, and the last pass writes to screen without encoding.
+    const LEGACY_GAMMA_ENCODE_GLSL =
+        `pow( clamp( LEGACY_COLOR, 0.0, 1.0 ), vec3( ${(1.0 / LEGACY_OUTPUT_GAMMA).toFixed(6)} ) )`
+
+    class LegacyGammaEncodeEffect extends Effect {
+
+        constructor () {
+            super(
+                "LegacyGammaEncodeEffect",
+                "void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {\n" +
+                `    outputColor = vec4(${LEGACY_GAMMA_ENCODE_GLSL.replace("LEGACY_COLOR", "inputColor.rgb")}, inputColor.a);\n` +
+                "}\n",
+                { blendFunction: BlendFunction.SRC }
+            )
+            this.inputColorSpace = null
+        }
+
+    }
+
+    // Make a material write gamma-encoded color, as r104 did when rendering into a render target.
+    // Used for the god-rays light source, which postprocessing renders into its own target.
+    function encodeMaterialOutputAsLegacyGamma (material) {
+
+        material.onBeforeCompile = (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+                /}\s*$/,
+                `    gl_FragColor.rgb = ${LEGACY_GAMMA_ENCODE_GLSL.replace("LEGACY_COLOR", "gl_FragColor.rgb")};\n}`
+            )
+        }
+        material.customProgramCacheKey = () => "legacy-gamma-output"
 
     }
 
@@ -218,7 +260,9 @@
                     checked: false,
                     handler: () => {
 
-                        this.postProcessingPasses["aaPass"].enabled = !this.postProcessingPasses["aaPass"].enabled
+                        const aaPass = this.postProcessingPasses["aaPass"]
+                        if (!aaPass) return
+                        aaPass.enabled = !aaPass.enabled
 
                     }
                 }
@@ -295,8 +339,10 @@
                         default: 0.140,
                         valueFormatted: Number(0.036).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["brightnessContrastEffect"]
-                                .uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
+                            const effect = this.postProcessingEffects["brightnessContrastEffect"]
+                            if (effect) {
+                                effect.uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
+                            }
 
                             this.commandPanelSliders.brightness.valueFormatted =
                                 Number(this.commandPanelSliders.brightness.value).toFixed(3)
@@ -312,8 +358,10 @@
                         default: 0.400,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["brightnessContrastEffect"]
-                                .uniforms.get("contrast").value = this.commandPanelSliders.contrast.value
+                            const effect = this.postProcessingEffects["brightnessContrastEffect"]
+                            if (effect) {
+                                effect.uniforms.get("contrast").value = this.commandPanelSliders.contrast.value
+                            }
 
                             this.commandPanelSliders.contrast.valueFormatted =
                                 Number(this.commandPanelSliders.contrast.value).toFixed(3)
@@ -329,7 +377,10 @@
                         default: 0.000,
                         valueFormatted: Number(0.000).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["hueSaturationEffect"].setHue(this.commandPanelSliders.hue.value)
+                            const effect = this.postProcessingEffects["hueSaturationEffect"]
+                            if (effect) {
+                                effect.setHue(this.commandPanelSliders.hue.value)
+                            }
 
                             this.commandPanelSliders.hue.valueFormatted =
                                 Number(this.commandPanelSliders.hue.value).toFixed(3)
@@ -345,8 +396,10 @@
                         default: 0.750,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["hueSaturationEffect"]
-                                .uniforms.get("saturation").value = this.commandPanelSliders.saturation.value
+                            const effect = this.postProcessingEffects["hueSaturationEffect"]
+                            if (effect) {
+                                effect.uniforms.get("saturation").value = this.commandPanelSliders.saturation.value
+                            }
 
                             this.commandPanelSliders.saturation.valueFormatted =
                                 Number(this.commandPanelSliders.saturation.value).toFixed(3)
@@ -560,6 +613,10 @@
                         color: new THREE.Color().setHex(0xffddaa, THREE.LinearSRGBColorSpace),
                         alphaTest: 0,
                         transparent: true,
+                        // Depth-free like the original, where GodRaysEffect cleared depthWrite on
+                        // this material: the god-rays light pass depth-tests its own copy of the
+                        // sun against the scene depth, which must not contain the sun sprite.
+                        depthWrite: false,
                         fog: false
                     })
 
@@ -573,9 +630,25 @@
                     sun.position.set(position.x, position.y, position.z)
                     this.scene.add(sun)
 
-                    const godRaysEffect = new GodRaysEffect(this.camera, sun, {
-                        // resolutionScale: 0.75,
-                        resolutionScale: 0.28,
+                    // The god-rays light pass renders its source into a separate target, where r104
+                    // wrote gamma-encoded color. A twin of the visible sun with a gamma-encoding
+                    // material feeds that pass; the visible sun keeps its regular material.
+                    const lightSourceMaterial = sunMaterial.clone()
+                    encodeMaterialOutputAsLegacyGamma(lightSourceMaterial)
+                    // Point sprites are sized in canvas pixels whatever the target. The original
+                    // rendered the light pass at the god-rays resolution scale, so the sun covered
+                    // 1/scale more of that target than of the screen; postprocessing 6.39.4 renders
+                    // it at full resolution, so the twin is enlarged by the same factor.
+                    lightSourceMaterial.size = sunMaterial.size / GODRAYS_RESOLUTION_SCALE
+                    const lightSource = new THREE.Points(sunGeometry, lightSourceMaterial)
+                    lightSource.frustumCulled = false
+                    lightSource.position.copy(sun.position)
+                    // GodRaysEffect disables matrixAutoUpdate while rendering the light source, and
+                    // this twin never joins the main scene, so its static matrix is built here.
+                    lightSource.updateMatrix()
+
+                    const godRaysEffect = new GodRaysEffect(this.camera, lightSource, {
+                        resolutionScale: GODRAYS_RESOLUTION_SCALE,
                         kernelSize: KernelSize.SMALL,
                         density: 0.96,
                         decay: 0.93,
@@ -585,8 +658,9 @@
                         clampMax: 1.0
                     })
 
-                    // The original's anti-banding dither for the 8-bit frame buffer.
-                    godRaysEffect.dithering = true
+                    // Dithering is an 8-bit anti-banding device; on HalfFloat buffers it produces
+                    // chroma speckle (see #81), so it stays off.
+                    godRaysEffect.dithering = false
 
                     const params = [
                         {
@@ -683,47 +757,116 @@
 
                 }
 
-                const smaaEffect = createSMAAEffect()
-                const bloomEffect = createBloomEffect()
-                const hueSaturationEffect = createHueSaturationEffect()
-                const brightnessContrastEffect = createBrightnessContrastEffect()
-                const godRayEffect = await createGodRayEffect()
+                // Parse the ?fx query parameter into the parity composer selection.
+                //   absent or no value -> composer active; the four beauty effects (godrays, bloom,
+                //                        huesat, bc); SMAA present but disabled.
+                //   =<csv>            -> composer active; only the named effects. Tokens: none,
+                //                        godrays, bloom, huesat, bc, smaa. Unknown tokens are ignored.
+                const KNOWN_FX_TOKENS = ["none", "godrays", "bloom", "huesat", "bc", "smaa"]
+                const DEFAULT_FX_EFFECTS = ["godrays", "bloom", "huesat", "bc"]
+
+                const fxParams = new URLSearchParams(window.location.search)
+                const selectedEffects = new Set()
+                let isDefaultSelection = false
+
+                this.parityBypassComposer = false
+
+                const rawFx = fxParams.get("fx")
+                if (!rawFx) {
+                    isDefaultSelection = true
+                    DEFAULT_FX_EFFECTS.forEach(t => selectedEffects.add(t))
+                } else {
+                    for (const token of rawFx.split(",").map(s => s.trim()).filter(Boolean)) {
+                        if (!KNOWN_FX_TOKENS.includes(token)) {
+                            console.warn(`${TAG} initPostProcessing: unknown ?fx token "${token}" ignored`)
+                            continue
+                        }
+                        if (token !== "none") {
+                            selectedEffects.add(token)
+                        }
+                    }
+                }
+
+                this.paritySelectedEffects = selectedEffects
+
+                const wantGodrays = selectedEffects.has("godrays")
+                const wantBloom = selectedEffects.has("bloom")
+                const wantHueSat = selectedEffects.has("huesat")
+                const wantBc = selectedEffects.has("bc")
+                const wantSmaa = selectedEffects.has("smaa")
+                // aaPass exists when SMAA is requested, or in the default selection where it is
+                // present-but-disabled (matching the pre-parity chain and the L-key / panel toggle).
+                const buildAaPass = wantSmaa || isDefaultSelection
 
                 const renderPass = new RenderPass(this.scene, this.camera)
-                renderPass.renderToScreen = false
                 renderPass.clear = true
 
-                const aaPass = new EffectPass(
-                    this.camera,
-                    smaaEffect,
-                )
-                aaPass.renderToScreen = false
-                aaPass.enabled = false
+                let aaPass = null
+                if (buildAaPass) {
+                    const smaaEffect = createSMAAEffect()
+                    aaPass = new EffectPass(this.camera, smaaEffect)
+                    aaPass.enabled = wantSmaa
+                }
 
-                const beautyPass = new EffectPass(
-                    this.camera,
-                    hueSaturationEffect,
-                    brightnessContrastEffect,
-                    godRayEffect,
-                    bloomEffect
-                )
-                beautyPass.renderToScreen = true
+                const beautyEffects = []
+                let bloomEffect = null
+                let hueSaturationEffect = null
+                let brightnessContrastEffect = null
+                let godRayEffect = null
 
-                this.composer.addPass(renderPass)
-                this.composer.addPass(aaPass)
-                this.composer.addPass(beautyPass)
+                if (wantHueSat) {
+                    hueSaturationEffect = createHueSaturationEffect()
+                    beautyEffects.push(hueSaturationEffect)
+                }
+                if (wantBc) {
+                    brightnessContrastEffect = createBrightnessContrastEffect()
+                    beautyEffects.push(brightnessContrastEffect)
+                }
+                if (wantGodrays) {
+                    godRayEffect = await createGodRayEffect()
+                    beautyEffects.push(godRayEffect)
+                }
+                if (wantBloom) {
+                    bloomEffect = createBloomEffect()
+                    beautyEffects.push(bloomEffect)
+                }
 
-                this.postProcessingEffects["bloomEffect"] = bloomEffect
-                this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
-                this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
-                this.postProcessingEffects["godRayEffect"] = godRayEffect
+                let beautyPass = null
+                if (beautyEffects.length > 0) {
+                    beautyPass = new EffectPass(this.camera, ...beautyEffects)
+                }
 
-                this.postProcessingPasses["aaPass"] = aaPass
-                this.postProcessingPasses["beautyPass"] = beautyPass
+                // RenderPass -> gamma encode -> (SMAA) -> (beauty). Every effect runs on the
+                // gamma-encoded values (see LegacyGammaEncodeEffect), so no effect converts color
+                // spaces and no pass encodes again on its way to the screen. For ?fx=none the chain
+                // is RenderPass alone, rendering to screen like the direct-render bypass path.
+                const effectPasses = [aaPass, beautyPass].filter(Boolean)
+                const parityPasses = [renderPass]
+                if (effectPasses.length > 0) {
+                    parityPasses.push(new EffectPass(this.camera, new LegacyGammaEncodeEffect()), ...effectPasses)
+                }
+
+                parityPasses.forEach((pass, index) => {
+                    if (pass instanceof EffectPass) {
+                        pass.effects.forEach(effect => { effect.inputColorSpace = null })
+                        pass.fullscreenMaterial.encodeOutput = false
+                    }
+                    pass.renderToScreen = (index === parityPasses.length - 1)
+                    this.composer.addPass(pass)
+                })
+
+                if (bloomEffect) this.postProcessingEffects["bloomEffect"] = bloomEffect
+                if (hueSaturationEffect) this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
+                if (brightnessContrastEffect) this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
+                if (godRayEffect) this.postProcessingEffects["godRayEffect"] = godRayEffect
+
+                if (aaPass) this.postProcessingPasses["aaPass"] = aaPass
+                if (beautyPass) this.postProcessingPasses["beautyPass"] = beautyPass
 
                 const onKeyup = (e) => {
                     // L
                     if (e.keyCode === 76) {
+                        if (!aaPass) return
                         this.commandPanelSwitches.antialias.checked = !this.commandPanelSwitches.antialias.checked
                         aaPass.enabled = !aaPass.enabled
                     }
@@ -1072,6 +1215,13 @@
                     // MESH
                     if (o.type && o.type === "Mesh") {
 
+                        // r104's GLTFLoader kept depthWrite on for alphaMode BLEND materials; modern
+                        // three turns it off (three.js #17706). Restored so transparent level parts
+                        // such as the door glass occlude what lies behind them, sun included.
+                        if (o.material && o.material.transparent) {
+                            o.material.depthWrite = true
+                        }
+
                         if (o.name.startsWith("FLOORS_SHADOW")) {
 
                             o.castShadow = false
@@ -1252,9 +1402,8 @@
                 yawObject.rotation.y = -this.level.rotation.y
                 this.scene.add(yawObject)
 
-                // The postprocessing chain is disabled by default pending its parity rework;
-                // ?fx boots with the composer active.
-                this.parityBypassComposer = !new URLSearchParams(window.location.search).has('fx')
+                // this.parityBypassComposer / this.paritySelectedEffects are set from the ?fx query
+                // parameter in initPostProcessing (which runs before this method).
 
                 // Parity-debug hook: teleport the camera, read its pose, locate the
                 // sun and toggle the postprocessing composer for A/B parity captures.
@@ -1278,6 +1427,12 @@
                     setAxes: (visible) => {
                         if (this.axesHelper) this.axesHelper.visible = visible
                     },
+                    getPostProcessing: () => ({
+                        renderer: this.renderer,
+                        composer: this.composer,
+                        effects: this.postProcessingEffects,
+                        passes: this.postProcessingPasses,
+                    }),
                 }
 
                 this.controls.forward =  false
@@ -3649,7 +3804,14 @@
 
                 applyLegacyOutputGamma()
 
-                this.renderer = new THREE.WebGLRenderer({antialias: false, alpha: false})
+                // No depth:false here: the composer-bypass path renders directly to screen and
+                // needs the default depth buffer. antialias/stencil off per the postprocessing README.
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: false,
+                    alpha: false,
+                    stencil: false,
+                    powerPreference: "high-performance"
+                })
                 this.renderer.setClearColor(0x000000)
                 this.renderer.setSize(this.width, this.height)
                 this.renderer.setPixelRatio(window.devicePixelRatio * this.commandPanelSliders.resolution.default)
@@ -3661,8 +3823,10 @@
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                // Default 8-bit frame buffer, matching the vendored postprocessing 6.3.2 original.
-                this.composer = new EffectComposer(this.renderer)
+                // HalfFloat ping-pong buffers for the linear postprocessing workflow recommended by
+                // the postprocessing README: effects compute on linear values and the final pass
+                // encodes to sRGB (via the patched OETF chunk), avoiding the banding of 8-bit buffers.
+                this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType })
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
 
