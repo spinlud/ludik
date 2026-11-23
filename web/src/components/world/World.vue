@@ -260,9 +260,9 @@
                     checked: false,
                     handler: () => {
 
-                        const aaPass = this.postProcessingPasses["aaPass"]
-                        if (!aaPass) return
-                        aaPass.enabled = !aaPass.enabled
+                        this.withPostProcessingEntry(this.postProcessingPasses, "aaPass", aaPass => {
+                            aaPass.enabled = !aaPass.enabled
+                        })
 
                     }
                 }
@@ -339,10 +339,9 @@
                         default: 0.140,
                         valueFormatted: Number(0.036).toFixed(3),
                         handler: () => {
-                            const effect = this.postProcessingEffects["brightnessContrastEffect"]
-                            if (effect) {
+                            this.withPostProcessingEntry(this.postProcessingEffects, "brightnessContrastEffect", effect => {
                                 effect.uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
-                            }
+                            })
 
                             this.commandPanelSliders.brightness.valueFormatted =
                                 Number(this.commandPanelSliders.brightness.value).toFixed(3)
@@ -358,10 +357,9 @@
                         default: 0.400,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            const effect = this.postProcessingEffects["brightnessContrastEffect"]
-                            if (effect) {
+                            this.withPostProcessingEntry(this.postProcessingEffects, "brightnessContrastEffect", effect => {
                                 effect.uniforms.get("contrast").value = this.commandPanelSliders.contrast.value
-                            }
+                            })
 
                             this.commandPanelSliders.contrast.valueFormatted =
                                 Number(this.commandPanelSliders.contrast.value).toFixed(3)
@@ -377,10 +375,9 @@
                         default: 0.000,
                         valueFormatted: Number(0.000).toFixed(3),
                         handler: () => {
-                            const effect = this.postProcessingEffects["hueSaturationEffect"]
-                            if (effect) {
+                            this.withPostProcessingEntry(this.postProcessingEffects, "hueSaturationEffect", effect => {
                                 effect.setHue(this.commandPanelSliders.hue.value)
-                            }
+                            })
 
                             this.commandPanelSliders.hue.valueFormatted =
                                 Number(this.commandPanelSliders.hue.value).toFixed(3)
@@ -396,10 +393,9 @@
                         default: 0.750,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            const effect = this.postProcessingEffects["hueSaturationEffect"]
-                            if (effect) {
+                            this.withPostProcessingEntry(this.postProcessingEffects, "hueSaturationEffect", effect => {
                                 effect.uniforms.get("saturation").value = this.commandPanelSliders.saturation.value
-                            }
+                            })
 
                             this.commandPanelSliders.saturation.valueFormatted =
                                 Number(this.commandPanelSliders.saturation.value).toFixed(3)
@@ -426,6 +422,14 @@
         },
 
         methods: {
+
+            /**
+             * Call apply with the postprocessing effect or pass registered under key, if any.
+             */
+            withPostProcessingEntry (registry, key, apply) {
+                const entry = registry[key]
+                if (entry) apply(entry)
+            },
 
 
             /**
@@ -646,6 +650,7 @@
                     // GodRaysEffect disables matrixAutoUpdate while rendering the light source, and
                     // this twin never joins the main scene, so its static matrix is built here.
                     lightSource.updateMatrix()
+                    this.godRaysLightSourceMaterial = lightSourceMaterial
 
                     const godRaysEffect = new GodRaysEffect(this.camera, lightSource, {
                         resolutionScale: GODRAYS_RESOLUTION_SCALE,
@@ -658,8 +663,9 @@
                         clampMax: 1.0
                     })
 
-                    // Dithering is an 8-bit anti-banding device; on HalfFloat buffers it produces
-                    // chroma speckle (see #81), so it stays off.
+                    // Off: the god-rays output is added to gamma-encoded values that the composer's
+                    // HalfFloat buffers store without 8-bit quantization, so there is no banding for
+                    // dithering to hide, and its noise would show as chroma speckle on the rays.
                     godRaysEffect.dithering = false
 
                     const params = [
@@ -669,7 +675,10 @@
                             min: 0.00,
                             max: 1.00,
                             step: 0.01,
-                            cb: (v) => { godRaysEffect.setResolutionScale(v) }
+                            cb: (v) => {
+                                godRaysEffect.setResolutionScale(v)
+                                lightSourceMaterial.size = sunMaterial.size / v
+                            }
                         }
                     ]
 
@@ -762,8 +771,14 @@
                 //                        huesat, bc); SMAA present but disabled.
                 //   =<csv>            -> composer active; only the named effects. Tokens: none,
                 //                        godrays, bloom, huesat, bc, smaa. Unknown tokens are ignored.
-                const KNOWN_FX_TOKENS = ["none", "godrays", "bloom", "huesat", "bc", "smaa"]
-                const DEFAULT_FX_EFFECTS = ["godrays", "bloom", "huesat", "bc"]
+                // Beauty effects by ?fx token, in beauty EffectPass order.
+                const BEAUTY_EFFECTS = [
+                    { token: "huesat", key: "hueSaturationEffect", create: createHueSaturationEffect },
+                    { token: "bc", key: "brightnessContrastEffect", create: createBrightnessContrastEffect },
+                    { token: "godrays", key: "godRayEffect", create: createGodRayEffect },
+                    { token: "bloom", key: "bloomEffect", create: createBloomEffect },
+                ]
+                const KNOWN_FX_TOKENS = ["none", "smaa", ...BEAUTY_EFFECTS.map(e => e.token)]
 
                 const fxParams = new URLSearchParams(window.location.search)
                 const selectedEffects = new Set()
@@ -774,7 +789,7 @@
                 const rawFx = fxParams.get("fx")
                 if (!rawFx) {
                     isDefaultSelection = true
-                    DEFAULT_FX_EFFECTS.forEach(t => selectedEffects.add(t))
+                    BEAUTY_EFFECTS.forEach(e => selectedEffects.add(e.token))
                 } else {
                     for (const token of rawFx.split(",").map(s => s.trim()).filter(Boolean)) {
                         if (!KNOWN_FX_TOKENS.includes(token)) {
@@ -787,15 +802,9 @@
                     }
                 }
 
-                this.paritySelectedEffects = selectedEffects
-
-                const wantGodrays = selectedEffects.has("godrays")
-                const wantBloom = selectedEffects.has("bloom")
-                const wantHueSat = selectedEffects.has("huesat")
-                const wantBc = selectedEffects.has("bc")
                 const wantSmaa = selectedEffects.has("smaa")
-                // aaPass exists when SMAA is requested, or in the default selection where it is
-                // present-but-disabled (matching the pre-parity chain and the L-key / panel toggle).
+                // aaPass exists when SMAA is requested (enabled), or in the default selection, where
+                // it is present but disabled so the L key / command-panel toggle can enable it.
                 const buildAaPass = wantSmaa || isDefaultSelection
 
                 const renderPass = new RenderPass(this.scene, this.camera)
@@ -809,26 +818,11 @@
                 }
 
                 const beautyEffects = []
-                let bloomEffect = null
-                let hueSaturationEffect = null
-                let brightnessContrastEffect = null
-                let godRayEffect = null
-
-                if (wantHueSat) {
-                    hueSaturationEffect = createHueSaturationEffect()
-                    beautyEffects.push(hueSaturationEffect)
-                }
-                if (wantBc) {
-                    brightnessContrastEffect = createBrightnessContrastEffect()
-                    beautyEffects.push(brightnessContrastEffect)
-                }
-                if (wantGodrays) {
-                    godRayEffect = await createGodRayEffect()
-                    beautyEffects.push(godRayEffect)
-                }
-                if (wantBloom) {
-                    bloomEffect = createBloomEffect()
-                    beautyEffects.push(bloomEffect)
+                for (const { token, key, create } of BEAUTY_EFFECTS) {
+                    if (!selectedEffects.has(token)) continue
+                    const effect = await create()
+                    beautyEffects.push(effect)
+                    this.postProcessingEffects[key] = effect
                 }
 
                 let beautyPass = null
@@ -854,11 +848,6 @@
                     pass.renderToScreen = (index === parityPasses.length - 1)
                     this.composer.addPass(pass)
                 })
-
-                if (bloomEffect) this.postProcessingEffects["bloomEffect"] = bloomEffect
-                if (hueSaturationEffect) this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
-                if (brightnessContrastEffect) this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
-                if (godRayEffect) this.postProcessingEffects["godRayEffect"] = godRayEffect
 
                 if (aaPass) this.postProcessingPasses["aaPass"] = aaPass
                 if (beautyPass) this.postProcessingPasses["beautyPass"] = beautyPass
@@ -1215,9 +1204,8 @@
                     // MESH
                     if (o.type && o.type === "Mesh") {
 
-                        // r104's GLTFLoader kept depthWrite on for alphaMode BLEND materials; modern
-                        // three turns it off (three.js #17706). Restored so transparent level parts
-                        // such as the door glass occlude what lies behind them, sun included.
+                        // Keep depthWrite on for transparent meshes (three.js #17706 turns it off for
+                        // BLEND materials) so glass occludes what lies behind it, sun included.
                         if (o.material && o.material.transparent) {
                             o.material.depthWrite = true
                         }
@@ -1402,37 +1390,38 @@
                 yawObject.rotation.y = -this.level.rotation.y
                 this.scene.add(yawObject)
 
-                // this.parityBypassComposer / this.paritySelectedEffects are set from the ?fx query
-                // parameter in initPostProcessing (which runs before this method).
+                // this.parityBypassComposer is set in initPostProcessing (which runs before this method).
 
                 // Parity-debug hook: teleport the camera, read its pose, locate the
                 // sun and toggle the postprocessing composer for A/B parity captures.
-                window.__ludikParity = {
-                    setPose: (x, y, z, pitch, yaw) => {
-                        this.controls.setPosition(x, y, z)
-                        this.controls.setRotation(pitch, yaw)
-                    },
-                    getPose: () => {
-                        const p = this.controls.getPosition()
-                        const r = this.controls.getRotation()
-                        return { x: p.x, y: p.y, z: p.z, pitch: r.x, yaw: r.y }
-                    },
-                    getSun: () => {
-                        const s = new THREE.Vector3(0, 0, 1000).applyQuaternion(this.level.quaternion)
-                        return { x: s.x, y: s.y, z: s.z }
-                    },
-                    setEffects: (enabled) => {
-                        this.parityBypassComposer = !enabled
-                    },
-                    setAxes: (visible) => {
-                        if (this.axesHelper) this.axesHelper.visible = visible
-                    },
-                    getPostProcessing: () => ({
-                        renderer: this.renderer,
-                        composer: this.composer,
-                        effects: this.postProcessingEffects,
-                        passes: this.postProcessingPasses,
-                    }),
+                if (import.meta.env.DEV) {
+                    window.__ludikParity = {
+                        setPose: (x, y, z, pitch, yaw) => {
+                            this.controls.setPosition(x, y, z)
+                            this.controls.setRotation(pitch, yaw)
+                        },
+                        getPose: () => {
+                            const p = this.controls.getPosition()
+                            const r = this.controls.getRotation()
+                            return { x: p.x, y: p.y, z: p.z, pitch: r.x, yaw: r.y }
+                        },
+                        getSun: () => {
+                            const s = new THREE.Vector3(0, 0, 1000).applyQuaternion(this.level.quaternion)
+                            return { x: s.x, y: s.y, z: s.z }
+                        },
+                        setEffects: (enabled) => {
+                            this.parityBypassComposer = !enabled
+                        },
+                        setAxes: (visible) => {
+                            if (this.axesHelper) this.axesHelper.visible = visible
+                        },
+                        getPostProcessing: () => ({
+                            renderer: this.renderer,
+                            composer: this.composer,
+                            effects: this.postProcessingEffects,
+                            passes: this.postProcessingPasses,
+                        }),
+                    }
                 }
 
                 this.controls.forward =  false
@@ -3823,9 +3812,13 @@
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                // HalfFloat ping-pong buffers for the linear postprocessing workflow recommended by
-                // the postprocessing README: effects compute on linear values and the final pass
-                // encodes to sRGB (via the patched OETF chunk), avoiding the banding of 8-bit buffers.
+                // HalfFloat ping-pong buffers. They hold the linear scene render until
+                // LegacyGammaEncodeEffect clamps and encodes it; every later pass carries gamma
+                // values (see the postprocessing working space comment by LEGACY_GAMMA_ENCODE_GLSL).
+                // HalfFloat rather than r104's 8-bit storage: values are clamped to [0, 1] after
+                // the encode, so the only difference is the dropped 8-bit rounding, whereas 8-bit
+                // buffers get tagged sRGB by postprocessing internally, which would re-decode the
+                // gamma values.
                 this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType })
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
@@ -3982,6 +3975,9 @@
 
             this.eventManager.removeBusEvents()
             this.eventManager.removeDomEvents()
+
+            if (this.composer) this.composer.dispose()
+            if (this.godRaysLightSourceMaterial) this.godRaysLightSourceMaterial.dispose()
 
         }
 
