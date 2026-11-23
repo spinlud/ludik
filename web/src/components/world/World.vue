@@ -337,7 +337,7 @@
                         step: 0.001,
                         value: 0.140,
                         default: 0.140,
-                        valueFormatted: Number(0.036).toFixed(3),
+                        valueFormatted: Number(0.140).toFixed(3),
                         handler: () => {
                             this.withPostProcessingEntry(this.postProcessingEffects, "brightnessContrastEffect", effect => {
                                 effect.uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
@@ -2047,9 +2047,12 @@
                     let cylinderStargateRotationStep = 0
 
                     const brightnessContrastEffect = this.postProcessingEffects["brightnessContrastEffect"]
-                    const brightnessDefault = 0.036
+                    // Brightness the scene returns to: the current Command Panel value
+                    const brightnessRestoreValue = () => this.commandPanelSliders.brightness.value
 
                     let isLoading = false
+                    // False after a teleport or a WebGL stop until the player leaves the stargate zone
+                    let isArmed = true
 
                     const stargateSound = new THREE.Audio(this.audioListener)
                     stargateSound.buffer = await this.loaderManager.loadAudio("assets/audio/Stargate_128cbr.mp3")
@@ -2184,7 +2187,6 @@
                                 pbar.container.style.display = "none"
                                 pbar.inner.style.width = `0%`
                                 pbar.value.textContent = `0%`
-                                brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = brightnessDefault)
                                 this.isConsoleOpen = false
                                 this.isTransitionRunning = false
                             }
@@ -2204,7 +2206,7 @@
                         this.tweenGroupStargate.removeAll()
                         this.audioFadeOut(stargateSound, fadeTime / 1000, 0, this.tweenGroupFXAudioFadeOut)
                         this.audioFadeOut(stargateCylinderSound, fadeTime / 1000 * 3, 0, this.tweenGroupFXAudioFadeOut)
-                        brightnessTween(brightnessDefault, fadeTime).start()
+                        brightnessTween(brightnessRestoreValue(), fadeTime).start()
                         stargateCylinderOpacityTween(0, loadTime / 4).start()
                         stargateCylinderRotationTween(-0.1, loadTime / 4).start()
                         pbar.container.style.display = "none"
@@ -2220,12 +2222,13 @@
                         }
 
                         if (this.playerZone === this.zones.stargate) {
-                            if (!isLoading) {
+                            if (!isLoading && isArmed) {
                                 startLoading()
                             }
 
                         }
                         else {
+                            isArmed = true
                             if (isLoading) {
                                 await stopLoading()
                             }
@@ -2233,13 +2236,32 @@
 
                     })
 
-                    const onWebGLStop = () => {
+                    // Put the stargate back in its idle state: the stargate tweens are cleared
+                    // on WebGL stop, so nothing else would bring these values back.
+                    const resetStargate = () => {
                         timeoutId && clearTimeout(timeoutId)
+                        isLoading = false
+                        this.isTransitionRunning = false
+                        this.isConsoleOpen = false
                         stargateSound.isPlaying && stargateSound.stop()
-                        // stargateCylinderSound.isPlaying && stargateCylinderSound.stop()
+                        stargateSound.setVolume(0)
+                        stargateCylinderSound.isPlaying && stargateCylinderSound.stop()
+                        stargateCylinderSound.setVolume(0)
+                        brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = brightnessRestoreValue())
+                        cylinderStargate.material.opacity = 0
+                        cylinderStargate.visible = false
+                        cylinderStargateRotationStep = 0
                         pbar.container.style.display = "none"
                         pbar.inner.style.width = `0%`
                         pbar.value.textContent = `0%`
+                    }
+
+                    const onWebGLStop = () => {
+                        // A player still standing in the ring must step out before it activates again
+                        if (isLoading || this.playerZone === this.zones.stargate) {
+                            isArmed = false
+                        }
+                        resetStargate()
                     }
 
                     // On WebGL stop, cancel transitions
