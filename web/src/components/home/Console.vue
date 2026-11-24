@@ -7,7 +7,8 @@
 
 <script setup>
 
-    import { ref, onMounted, onBeforeUnmount } from "vue"
+    import { ref, watch, onMounted, onBeforeUnmount } from "vue"
+    import { useAppStore } from "../../stores/app"
     import AudioManager from "../shared/AudioManager"
     import EventManager from "../shared/EventManager"
     import { wait } from "../shared/utils"
@@ -19,7 +20,6 @@
     const audioManager = new AudioManager()
 
     let reloadTyping = false
-    let isInitialized = false
 
     async function displayConsoleMessage () {
 
@@ -144,9 +144,6 @@
 
         appendGetInTouchLink()
 
-        // Trigger animation only the first time
-        isInitialized = true
-
     }
 
     function reloadConsoleMessage () {
@@ -160,13 +157,21 @@
         }, phraseTimeout)
     }
 
+    const appStore = useAppStore()
+    let hasStartedTyping = false
+
+    // Typing runs once per page load, starting the first time Home is revealed.
+    function startTypingOnFirstReveal (isHomeVisible) {
+        if (!isHomeVisible || hasStartedTyping) return
+        hasStartedTyping = true
+        setTimeout(displayConsoleMessage, 250)
+    }
+
+    watch(() => appStore.isHomeVisible, startTypingOnFirstReveal)
+
     onMounted(() => {
-        // Home boots directly visible while the World intro is stubbed, so start the
-        // typing animation on mount instead of waiting for a homeState transition.
-        if (!isInitialized) {
-            setTimeout(displayConsoleMessage, 250)
-            eventManager.addDomEvent(reloadRef.value, "click", reloadConsoleMessage)
-        }
+        eventManager.addDomEvent(reloadRef.value, "click", reloadConsoleMessage)
+        startTypingOnFirstReveal(appStore.isHomeVisible)
     })
 
     onBeforeUnmount(() => {

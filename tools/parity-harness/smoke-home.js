@@ -119,6 +119,43 @@ checks.homeVisible = async (h) => {
     await h.screenshot("home")
 }
 
+// --- check: intro ---
+// The console starts typing when Home is first revealed, ends with exactly one
+// "get in touch" link, and a mid-typing replay still ends with exactly one link.
+checks.intro = async (h) => {
+    const consoleText = () => h.page.$eval("#homeConsoleMessage", (el) => el.textContent || "")
+    const linkCount = () => h.page.$$eval("#homeConsoleMessage span", (els) =>
+        els.filter((e) => (e.textContent || "").includes("get in touch")).length)
+    const waitForLink = () => h.page.waitForFunction(() =>
+        Array.from(document.querySelectorAll("#homeConsoleMessage span"))
+            .some((e) => (e.textContent || "").includes("get in touch")), null, { timeout: 60000 })
+
+    const early = await consoleText()
+    await waitForLink()
+    await h.wait(1500)
+    const full = await consoleText()
+    if (early.length === 0) throw new Error("console is empty right after Home was revealed")
+    if (early.length >= full.length) throw new Error(`console already finished on reveal (${early.length}/${full.length} chars)`)
+    let links = await linkCount()
+    if (links !== 1) throw new Error(`expected 1 link after typing, found ${links}`)
+
+    await h.page.click("#homeConsoleReload")
+    await h.wait(3000)
+    await h.page.click("#homeConsoleReload")
+    await h.wait(1500)
+    await waitForLink()
+    // Any interrupted run must also have settled: wait until the text is stable for 5s.
+    for (let prev = "", t = 0; t < 60; t++) {
+        const now = await h.page.$eval("#homeConsoleMessage", (el) => el.innerHTML)
+        if (now === prev) break
+        prev = now
+        await h.wait(5000)
+    }
+    links = await linkCount()
+    await h.screenshot("intro")
+    if (links !== 1) throw new Error(`expected 1 link after replay, found ${links}`)
+}
+
 // ---------------------------------------------------------------------------
 
 ;(async () => {
