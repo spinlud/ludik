@@ -338,6 +338,30 @@ checks.releaseLayout = async (h) => {
 
 // ---------------------------------------------------------------------------
 
+// --- check: legacyHashRedirect ---
+// A fresh load of a legacy hash URL lands on the equivalent history-mode path:
+// the hash is gone and the router's first navigation targets that path. The
+// app has no /releases route, so /albums stands in; on a fresh load the router
+// guard sends the uninitialized app to "/", recorded in redirectedFrom.
+checks.legacyHashRedirect = async (h) => {
+    const page = await h.page.context().newPage()
+    try {
+        await page.goto(`${baseUrl}/#/albums?scroll=true`, { waitUntil: "domcontentloaded" })
+        await page.waitForFunction(() => {
+            const app = document.querySelector("#app").__vue_app__
+            return !!app && app.config.globalProperties.$router.currentRoute.value.matched.length > 0
+        }, null, { timeout: 30000 })
+        const state = await page.evaluate(() => {
+            const route = document.querySelector("#app").__vue_app__.config.globalProperties.$router.currentRoute.value
+            return { hash: location.hash, from: route.redirectedFrom ? route.redirectedFrom.fullPath : null }
+        })
+        if (state.hash !== "") throw new Error(`hash still present: ${state.hash}`)
+        if (state.from !== "/albums?scroll=true") throw new Error(`first navigation was ${state.from}, expected /albums?scroll=true`)
+    } finally {
+        await page.close()
+    }
+}
+
 ;(async () => {
     const consoleLines = []
     const results = []

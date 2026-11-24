@@ -60,6 +60,13 @@ const routes = [
     }
 ]
 
+// Legacy hash-mode URLs (`/#/x?y`) are rewritten in place to their history-mode
+// path (`/x?y`) before the history is created, so the first navigation resolves
+// the real route.
+if (window.location.hash.startsWith('#/')) {
+    window.history.replaceState(window.history.state, '', window.location.hash.slice(1))
+}
+
 const router = createRouter({
     history: createWebHistory(),
     routes
