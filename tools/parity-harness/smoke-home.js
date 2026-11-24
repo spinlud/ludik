@@ -89,12 +89,12 @@ const helpers = (page) => ({
         await page.locator("#menu-list li", { hasText: label }).first().click()
         await wait(2000)
     },
-    // Client-side route change with ?scroll=true, keeping the app state.
-    async gotoRoute (routePath) {
-        await page.evaluate((p) => {
+    // Client-side route change with ?scroll=true plus any extra query, keeping the app state.
+    async gotoRoute (routePath, extraQuery = {}) {
+        await page.evaluate(({ p, q }) => {
             const router = document.querySelector("#app").__vue_app__.config.globalProperties.$router
-            return router.push({ path: p, query: { scroll: "true" } })
-        }, routePath)
+            return router.push({ path: p, query: { scroll: "true", ...q } })
+        }, { p: routePath, q: extraQuery })
         await wait(2000)
     },
     // src attributes of iframes inside a container selector.
@@ -117,6 +117,37 @@ checks.homeVisible = async (h) => {
     const visible = await h.page.isVisible("#homeContent")
     if (!visible) throw new Error("#homeContent is not visible")
     await h.screenshot("home")
+}
+
+// --- check: albums ---
+checks.albums = async (h) => {
+    const POSITRON_PLAYLIST = "playlists%2F687008079"
+    const POSITRON_TRACKS = ["559868439", "559868427", "559868409", "559868391", "559868373"]
+    const assertNoSpotify = async () => {
+        const all = await h.iframes("body")
+        if (all.some((s) => s.includes("spotify"))) throw new Error("a Spotify iframe is present")
+        const links = await h.page.$$eval("#albums a", (els) => els.map((a) => a.href))
+        if (links.some((l) => /spotify|song\.link/.test(l))) throw new Error("a Spotify/song.link link is present")
+    }
+    const soundcloud = async () => (await h.iframes("#albums")).filter((s) => s.startsWith("https://w.soundcloud.com/player/"))
+
+    await h.gotoRoute("/albums")
+    await assertNoSpotify()
+    let sc = await soundcloud()
+    if (sc.length !== 1 || !sc[0].includes(POSITRON_PLAYLIST)) {
+        throw new Error(`layout a: expected only the Positron playlist player, got ${JSON.stringify(sc)}`)
+    }
+    await h.page.locator("#albums").screenshot({ path: path.join(outDir, "albums-a.png") })
+
+    await h.gotoRoute("/albums", { layout: "b" })
+    await assertNoSpotify()
+    sc = await soundcloud()
+    const playlists = sc.filter((s) => s.includes(POSITRON_PLAYLIST))
+    const missing = POSITRON_TRACKS.filter((id) => !sc.some((s) => s.includes(`tracks%2F${id}`)))
+    if (playlists.length !== 1 || sc.length !== 6 || missing.length) {
+        throw new Error(`layout b: expected playlist + 5 track players, got ${JSON.stringify(sc)}`)
+    }
+    await h.page.locator("#albums").screenshot({ path: path.join(outDir, "albums-b.png") })
 }
 
 // ---------------------------------------------------------------------------
