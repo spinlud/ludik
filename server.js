@@ -1,101 +1,34 @@
-/**
- * ---------------------------------------------------------------------------------------------------------------------
- * server.js
- * ---------------------------------------------------------------------------------------------------------------------
- */
+import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const port = process.env.PORT || 8080;
+const distDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "dist");
 
-const express = require("express");
-const redirectToHTTPS = require("express-http-to-https").redirectToHTTPS;
-const path = require("path");
-const bodyParser = require("body-parser");
-const cookiePraser = require("cookie-parser");
-const morgan = require("morgan");
-const httpStatusCodes = require("http-status-codes");
-const config = require("config");
-const http = require("http");
+const app = express();
 
-
-const port = process.env.PORT || config.get("port");
-const platform = process.platform;
-const distDir = config.get("dist_dir");
-
-let app = express(),
-    server = require("http").Server(app);
-
-// Don't redirect if the hostname is `localhost:port`, `0.0.0.0:port` or the route is `/insecure`
-// app.use(redirectToHTTPS([/localhost:(\d{4})/, /192.168.*.*/, /0.0.0.0:(\d{4})/], [/\/insecure/], 301));
-
-app.use(function (req, res, next) {
+app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", req.get("Origin") || "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authentication, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5,  Date, X-Api-Version, X-File-Name");
     res.setHeader("Access-Control-Allow-Credentials", true);
 
     if (req.method === "OPTIONS") {
-        return res.sendStatus(httpStatusCodes.OK);
+        return res.sendStatus(200);
     }
-    else {
+    return next();
+});
+
+app.use(express.static(distDir));
+
+// SPA fallback: any GET that matched no static file gets index.html
+app.use((req, res, next) => {
+    if (req.method !== "GET") {
         return next();
     }
+    return res.sendFile("index.html", { root: distDir });
 });
 
-// app.use(morgan("dev")); // log every request to the console
-app.use(bodyParser.json({limit: "50mb"}));
-// app.use(cookiePraser());
-app.use(express.static(path.resolve(__dirname, distDir)));
-
-app.get("*", function(req, res) {
-    res.sendFile("index.html", {
-        root: distDir
-    });
+app.listen(port, () => {
+    console.log(`Server listening on port ${port}..`);
 });
-
-function startServer() {
-    server.listen(port, function() {
-        console.log("Server listening on port " + port + "..");
-    });
-}
-
-// Only necessary on Heroku to keep the dynamo up
-function pingServer() {
-
-    const timeout = 25 * 60 * 1000 // 25 minutes
-
-    setInterval(function() {
-
-        const options = {
-            host: config.get("url_prod"),
-            port: 8080,
-            path: "/"
-        };
-
-        http.get(options, function(res) {
-            res.on("data", function(chunk) {
-                try {
-                    // optional loggin
-                } catch (err) {
-                    console.log(err.message);
-                }
-            });
-        }).on("error", function(err) {
-            console.log("Error: " + err.message);
-        });
-    }, timeout);
-}
-
-startServer();
-
-// pingServer();
-
-
-
-
-
-
-
-
-
-
-
-
