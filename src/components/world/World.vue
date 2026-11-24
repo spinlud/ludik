@@ -494,8 +494,8 @@
                     this.isTouchDevice ?
                         `Tap on floor to navigate, drag or tilt the device to look around. <br>` :
                         this.isSafari ?
-                            `WASD or arrow keys to move, hold SHIFT to run, mouse to look around. <br>` :
-                            `WASD or arrow keys to move, hold SHIFT to run, mouse to look around, F to toggle full screen. <br>`,
+                            `WASD or arrow keys to move, hold SHIFT to run, SPACE to jump, mouse to look around. <br>` :
+                            `WASD or arrow keys to move, hold SHIFT to run, SPACE to jump, mouse to look around, F to toggle full screen. <br>`,
                     `This application uses positional audio. For the best experience, Google Chrome and headphones are recommended. Have a good journey! `
                 ]
 
@@ -1386,6 +1386,14 @@
                 let isMovingZ = false
                 let isRunning = false
 
+                // Jump: one fixed-height parabolic arc (constant gravity) on top of the eye height
+                const jumpHeight = 0.6 * this.scale
+                const jumpDuration = 1.0 // seconds in the air
+                const jumpMaxDelta = 0.1 // longest time step, so a pause cannot skip part of the arc
+                let isJumping = false
+                let jumpTime = 0
+                let playLandingSound = () => {} // set once the footstep buffers are loaded
+
                 // reset camera position and rotation
                 this.camera.position.set(0, 0, 0)
                 this.camera.rotation.set(0, 0, 0)
@@ -1455,6 +1463,17 @@
                         case 39: // right
                         case 68: // d
                             this.controls.right = true
+                            break
+
+                        case 32: // space
+                            // Leave the browser default action alone while the player is not in control
+                            if (this.controls.isLocked && this.controls.enabled) {
+                                e.preventDefault()
+                                if (!e.repeat && !isJumping) {
+                                    isJumping = true
+                                    jumpTime = 0
+                                }
+                            }
                             break
 
                         default:
@@ -1596,26 +1615,36 @@
                     let floorIndex = 0
                     let stairwayIndex = 0
 
+                    const playFootstep = () => {
+
+                        buffer = this.playerZone === this.zones.stairway ?
+                            stairwayBuffers[stairwayIndex++ % stairwayBuffers.length] :
+                            floorBuffers[floorIndex++ % floorBuffers.length]
+
+                        sound.isPlaying && sound.stop()
+                        sound.setBuffer(buffer)
+                        sound.play()
+
+                    }
+
                     const handler = () => {
 
                         delay = idleTime
 
-                        if (isMovingZ || isMovingX) {
-
-                            buffer = this.playerZone === this.zones.stairway ?
-                                stairwayBuffers[stairwayIndex++ % stairwayBuffers.length] :
-                                floorBuffers[floorIndex++ % floorBuffers.length]
-
+                        if (!isJumping && (isMovingZ || isMovingX)) {
                             delay = isRunning ? runTime : walkTime
-
-                            sound.isPlaying && sound.stop()
-                            sound.setBuffer(buffer)
-                            sound.play()
-
+                            playFootstep()
                         }
 
                         id = setTimeout(handler, delay)
 
+                    }
+
+                    // Restart the loop from the landing, so the next step keeps the walking pace
+                    playLandingSound = () => {
+                        clearTimeout(id)
+                        playFootstep()
+                        id = setTimeout(handler, isRunning ? runTime : walkTime)
                     }
 
                     // Start
@@ -1686,6 +1715,27 @@
                     }
                     else {
                         isMovingX = false
+                    }
+
+                })
+
+                this.fnlp.push((elapsedTime, deltaTime) => {
+
+                    // A pause freezes the jump; the command desk transition lets it finish
+                    if (!isJumping || !this.controls.isLocked && !this.isTransitionRunning) {
+                        return
+                    }
+
+                    jumpTime += Math.min(deltaTime, jumpMaxDelta)
+
+                    if (jumpTime < jumpDuration) {
+                        const t = jumpTime / jumpDuration
+                        yawObject.position.y = this.cameraOffsetY + 4 * jumpHeight * t * (1 - t)
+                    }
+                    else {
+                        isJumping = false
+                        yawObject.position.y = this.cameraOffsetY
+                        playLandingSound()
                     }
 
                 })
