@@ -187,6 +187,40 @@ checks.albums = async (h) => {
     await h.page.locator("#albums").screenshot({ path: path.join(outDir, "albums-b.png") })
 }
 
+// --- check: djSets ---
+// Reachable via the "DJ Sets" ring and the hamburger entry; shows the Soriano
+// player, its description and the 13-row tracklist.
+checks.djSets = async (h) => {
+    const assertSection = async (via) => {
+        await h.page.waitForSelector("#dj-sets", { state: "visible", timeout: 5000 })
+            .catch(() => { throw new Error(`${via}: #dj-sets not visible`) })
+        const sc = await h.iframes("#dj-sets")
+        if (!sc.some((s) => s.startsWith("https://w.soundcloud.com/player/") && s.includes("tracks%2F1640525379"))) {
+            throw new Error(`${via}: Soriano player missing, got ${JSON.stringify(sc)}`)
+        }
+        const text = await h.page.$eval("#dj-sets", (el) => el.textContent || "")
+        if (!text.includes("Set performed at Soriano Street Boulder climbing festival - September 2023")) {
+            throw new Error(`${via}: description missing`)
+        }
+        const rows = await h.page.$$eval("#dj-sets .tracklist-row", (els) => els.length)
+        if (rows !== 13) throw new Error(`${via}: expected 13 tracklist rows, found ${rows}`)
+    }
+
+    await h.gotoRoute("/")
+    await h.viaRing("DJ Sets")
+    await assertSection("ring")
+    await h.page.locator("#dj-sets").screenshot({ path: path.join(outDir, "dj-sets.png") })
+    await h.page.setViewportSize({ width: 390, height: 844 })
+    await h.wait(1000)
+    await h.page.locator("#dj-sets").screenshot({ path: path.join(outDir, "dj-sets-narrow.png") })
+    await h.page.setViewportSize(VIEWPORT)
+    await h.wait(1000)
+
+    await h.gotoRoute("/")
+    await h.viaHamburger("DJ Sets")
+    await assertSection("hamburger")
+}
+
 // ---------------------------------------------------------------------------
 
 ;(async () => {

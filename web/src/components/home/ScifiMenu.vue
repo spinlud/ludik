@@ -38,6 +38,12 @@
             displayName: "Singles"
         },
         {
+            id: "djSetsRoute",
+            path: "dj-sets",
+            name: "DjSets",
+            displayName: "DJ Sets"
+        },
+        {
             id: "abouteRoute",
             path: "about",
             name: "About",
