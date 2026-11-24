@@ -103,10 +103,19 @@ chroma variance in dark regions; noise artifacts raise it.
 
 ## Home smoke checks (`smoke-home.js`)
 
-`node smoke-home.js <baseUrl> [outDir]` (dev server only: it needs the
+`node smoke-home.js <baseUrl> [outDir] [--headed]` (dev server only: it needs the
 `window.__ludikParity` hook). It passes the click-to-start gate, then teleports the
 player onto the bridge and into the stargate so the World stops and Home is
-revealed the real way (~35s total). It then runs each named function in `checks`,
+revealed the real way.
+
+It runs headless by default with the Pointer Lock API stubbed through an init script.
+The app sees a granted lock, but the real mouse cursor is never captured and no
+window takes focus, so it doesn't interfere with whoever is using the machine.
+`--headed` shows the browser window and still uses the stub. On macOS it passes
+Metal GPU flags; without them headless WebGL runs in software and saturates every
+CPU core. A full run takes about 3 minutes.
+
+Once Home is visible it runs each named function in `checks`,
 prints `PASS <name>` / `FAIL <name>: <reason>` and exits non-zero on any failure.
 Screenshots and `console.txt` go to `captures/<outDir>` (default `smoke-home`).
 Checks get helpers: `viaRing(displayName)`, `viaHamburger(label)`,
