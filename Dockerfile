@@ -1,15 +1,16 @@
-FROM node:12-buster-slim
-
-RUN apt-get update && apt-get install -y \
-    bzip2
-
-WORKDIR app
-
+FROM node:22-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-
-RUN npm install
 RUN npm run build
 
+FROM node:22-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY server.js ./
+COPY --from=build /app/dist ./dist
 EXPOSE 8080
-
-CMD npm run start
+CMD ["npm", "start"]
