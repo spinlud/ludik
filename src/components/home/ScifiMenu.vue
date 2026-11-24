@@ -6,71 +6,55 @@
         <div id="scifiMenuOverlay"></div>
 
         <ul>
-            <li v-for="route in routes">
-                <scifi-menu-svg v-bind:route="route"></scifi-menu-svg>
+            <li v-for="route in routes" :key="route.id">
+                <ScifiMenuSVG :route="route" />
             </li>
         </ul>
 
     </div>
 </template>
 
-<script>
+<script setup>
 
     import ScifiMenuSVG from "./ScifiMenuSVG.vue"
 
-    export default {
-
-        name: "ScifiMenu",
-
-        components: {
-
-            scifiMenuSvg: ScifiMenuSVG
-
+    const routes = [
+        {
+            id: "homeRoute",
+            path: "/",
+            name: "LatestNews",
+            displayName: "Home"
         },
-
-        data () {
-            return {
-
-                title: "L U D I K",
-
-                routes: [
-                    {
-                        id: "homeRoute",
-                        path: "/",
-                        name: "LatestNews",
-                        displayName: "Home"
-                    },
-                    {
-                        id: "albumsRoute",
-                        path: "albums",
-                        name: "Albums",
-                        displayName: "Albums"
-                    },
-                    {
-                        id: "singlesRoute",
-                        path: "singles",
-                        name: "Singles",
-                        displayName: "Singles"
-                    },
-                    {
-                        id: "abouteRoute",
-                        path: "about",
-                        name: "About",
-                        displayName: "About"
-                    },
-                ]
-            }
+        {
+            id: "albumsRoute",
+            path: "albums",
+            name: "Albums",
+            displayName: "Albums"
         },
-    }
+        {
+            id: "singlesRoute",
+            path: "singles",
+            name: "Singles",
+            displayName: "Singles"
+        },
+        {
+            id: "djSetsRoute",
+            path: "dj-sets",
+            name: "DjSets",
+            displayName: "DJ Sets"
+        },
+        {
+            id: "abouteRoute",
+            path: "about",
+            name: "About",
+            displayName: "About"
+        },
+    ]
+
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/base/reset";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
+    @use "sass:color";
 
     #scifiMenu {
         position: relative;
@@ -81,7 +65,7 @@
         width: 1px;
         height: 100%;
         background: $scifi-cyan-hover;
-        @include box-shadow(0, 0, 4px, lighten($scifi-cyan-hover, 30%));
+        @include box-shadow(0, 0, 4px, color.adjust($scifi-cyan-hover, $lightness: 30%));
     }
 
     #verticalLineLeft {

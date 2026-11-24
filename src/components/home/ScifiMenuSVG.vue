@@ -1,6 +1,6 @@
 <template>
     <svg v-bind:id="`${route.id}`" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-         x="0px" y="0px"
+         x="0px" y="0px" v-on:click="onClick"
          viewBox="0 0 1000 1000" style="enable-background:new 0 0 1000 1000;" xml:space="preserve">
 
         <defs>
@@ -44,36 +44,13 @@
 
         <!-- Stroke ring -->
         <circle class="ring st0" cx="500" cy="500" r="302.8">
-            <!--<animateTransform attributeType="xml"-->
-            <!--attributeName="transform"-->
-            <!--type="rotate"-->
-            <!--from="0 500 500"-->
-            <!--to="360 500 500"-->
-            <!--dur="100s"-->
-            <!--repeatCount="indefinite"></animateTransform>-->
         </circle>
 
         <!-- Inner ring -->
-        <circle class="ring st1" cx="500" cy="500" r="237.7">
-            <animateTransform attributeType="xml"
-                              attributeName="transform"
-                              type="rotate"
-                              from="0 500 500"
-                              to="360 500 500"
-                              dur="40s"
-                              repeatCount="indefinite"></animateTransform>
-        </circle>
+        <circle class="ring st1" cx="500" cy="500" r="237.7"></circle>
 
         <!-- Outer ring -->
-        <circle class="ring st2" cx="500" cy="500" r="366.8" transform="rotate(0 500 500)">
-            <animateTransform attributeType="xml"
-                              attributeName="transform"
-                              type="rotate"
-                              from="0 500 500"
-                              to="-360 500 500"
-                              dur="50s"
-                              repeatCount="indefinite"></animateTransform>
-        </circle>
+        <circle class="ring st2" cx="500" cy="500" r="366.8"></circle>
 
         <!-- Outer thin ring -->
         <circle class="ring st3" cx="500" cy="500" r="385.1"></circle>
@@ -83,41 +60,27 @@
     </svg>
 </template>
 
-<script>
+<script setup>
 
-    import EventManager from "../shared/EventManager"
-    const eventManager = new EventManager()
-    const TAG = "[ScifiMenuSVG]"
+    import { useRouter } from "vue-router"
 
-    export default {
-
-        name: "ScifiMenuSVG",
-
-        props: [
-            "route"
-        ],
-
-        mounted () {
-
-            const onClick = () => {
-                // this.$router.push(this.route.path)
-                this.$router.push({name: this.route.name, params: {scroll: true}})
-            }
-
-            eventManager.addDomEvent(this.$el, "click", onClick)
-
+    const props = defineProps({
+        route: {
+            type: Object,
+            required: true
         }
+    })
+
+    const router = useRouter()
+
+    function onClick () {
+        router.push({ name: props.route.name, query: { scroll: "true" } })
     }
 
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/base/reset";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
+    @use "sass:color";
 
     svg {
         display: block;
@@ -137,17 +100,17 @@
         }
 
         &:hover .ring {
-            stroke: lighten($scifi-cyan-hover, 30%) !important;
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 30%) !important;
             filter: url(#glow);
         }
 
         &:hover .st0 {
-            stroke: lighten($scifi-cyan-hover, 50%) !important;
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 50%) !important;
             animation-play-state: running;
         }
 
         &:hover .svg-text {
-            stroke: lighten($scifi-cyan-hover, 60%);
+            stroke: color.adjust($scifi-cyan-hover, $lightness: 60%);
             filter: url(#glow);
         }
     }
@@ -159,10 +122,10 @@
     }
 
     .st0 {
-        stroke: lighten($scifi-cyan-hover, 15%);
+        stroke: color.adjust($scifi-cyan-hover, $lightness: 15%);
         stroke-dasharray: 12.1947,12.1947,12.1947,12.1947,12.1947,12.1947;
 
-        animation-name: spin;
+        animation-name: spin-ccw;
         animation-duration: 10000ms;
         animation-iteration-count: infinite;
         animation-timing-function: linear;
@@ -173,12 +136,18 @@
     .st1 {
         stroke: $scifi-cyan-hover;
         stroke-dasharray: 50,90,200,30,40,0;
+
+        animation: spin-cw 40s linear infinite;
+        transform-origin: 500px 500px;
     }
 
     .st2 {
         stroke: $scifi-cyan-hover;
         stroke-linecap: square;
         stroke-dasharray: 120, 20, 110, 20, 140;
+
+        animation: spin-ccw 50s linear infinite;
+        transform-origin: 500px 500px;
     }
 
     .st3 {
@@ -187,11 +156,7 @@
         stroke-linecap: square;
     }
 
-    /*svg:hover .st0 {*/
-        /*animation-play-state: running;*/
-    /*}*/
-
-    @keyframes spin {
+    @keyframes spin-ccw {
         from {
             transform: rotate(0deg);
         }
@@ -200,13 +165,20 @@
         }
     }
 
+    @keyframes spin-cw {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     .svg-text {
         margin: auto;
         font-size: 4em;
-        /*font-family: outerspace-militia;*/
         font-family: neuropol;
-        fill: lighten($scifi-cyan-hover, 40%);
+        fill: color.adjust($scifi-cyan-hover, $lightness: 40%);
     }
-
 
 </style>

@@ -9,111 +9,31 @@
     </div>
 </template>
 
-<script>
+<script setup>
 
-    import { states, mutations } from "./store/storeUtils"
-    import Mmenu from "./components/mmenu/Mmenu.vue"
-    import IconsSidebar from "./components/icons-sidebar/IconsSidebar.vue"
-    import LoadView from "./components/loading-view/LoadingView.vue"
-    import World from "./components/world/World.vue"
+    import { computed, watch } from "vue"
+    import { useAppStore } from "@/stores/app"
+    import { states } from "@/stores/storeUtils"
+    import Mmenu from "@/components/mmenu/Mmenu.vue"
+    import IconsSidebar from "@/components/icons-sidebar/IconsSidebar.vue"
+    import LoadView from "@/components/loading-view/LoadingView.vue"
+    import World from "@/components/world/World.vue"
 
-    const TAG = "[App]"
+    const store = useAppStore()
 
-    export default {
+    const isHomeVisible = computed(() => store.isHomeVisible)
+    const isAppLoading = computed(() => store.isAppLoading)
 
-        name: "App",
-
-        components: {
-            mmenu: Mmenu,
-            iconsSidebar: IconsSidebar,
-            loadView: LoadView,
-            world: World,
-        },
-
-        computed: {
-
-            isAppInitialized () {
-
-                return this.$store.getters.isAppInitialized
-
-            },
-
-            isAppLoading () {
-
-                return this.$store.getters.isAppLoading
-
-            },
-
-            isHomeVisible () {
-
-                return this.$store.getters.isHomeVisible
-
-            },
-
-            worldState () {
-
-                return this.$store.state.worldState
-
-            },
-
-            homeState () {
-
-                return this.$store.state.homeState
-
-            }
-
-        },
-
-        methods: {
-
-
-        },
-
-        watch: {
-
-            worldState (newVal, oldVal) {
-
-                switch (newVal) {
-
-                    case states.world.stop:
-                        this.$store.commit(mutations.homeState, states.home.start)
-                        break
-
-                }
-
-            },
-
-            homeState (newVal, oldVal) {
-
-                switch (newVal) {
-
-                    case states.home.stop:
-                        this.$store.commit(mutations.worldState, states.world.start)
-                        break
-
-                }
-
-            }
-
-        },
-
-        mounted () {
-
-            // // DELETE
-            // this.$store.commit(mutations.homeState, states.home.start)
-
+    // When the World stops (e.g. after the stargate teleport), bring the Home view back.
+    watch(() => store.worldState, (newVal) => {
+        if (newVal === states.world.stop) {
+            store.changeHomeState(states.home.start)
         }
+    })
 
-    }
 </script>
 
 <style scoped lang="scss">
-
-    @import "./styles/base/reset";
-    @import "./styles/base/typography";
-    @import "./styles/helpers/variables";
-    @import "./styles/helpers/colors";
-    @import "./styles/helpers/mixins";
 
     #app {
         width: 100vw;
@@ -129,14 +49,15 @@
 
         background-color: black;
 
-        background-image: url("../assets/images/SkyboxZ-1920_1080_70_10.jpg");
+        background-image: url("/assets/images/SkyboxZ-1920_1080_70_10.jpg");
         background-size: cover;
 
         @include mobile-portrait {
-            background-image: url("../assets/images/SkyboxZ-960_1600_70_10.jpg");
+            background-image: url("/assets/images/SkyboxZ-960_1600_70_10.jpg");
         }
 
         z-index: -1;
+        pointer-events: none;
     }
 
     @keyframes animate-stars {

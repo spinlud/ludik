@@ -7,32 +7,21 @@
     </div>
 </template>
 
-<script>
+<script setup>
 
-    import { states, mutations } from "../../store/storeUtils"
+    import { useAppStore } from "@/stores/app"
+    import { states } from "@/stores/storeUtils"
 
-    export default {
+    const store = useAppStore()
 
-        name: "HomeClose",
-
-        methods: {
-
-            onClick () {
-
-                this.$store.commit(mutations.homeState, states.home.stop)
-                this.$store.commit(mutations.worldState, states.world.start)
-
-            }
-
-        }
+    function onClick () {
+        store.changeHomeState(states.home.stop)
+        store.changeWorldState(states.world.start)
     }
+
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
 
     #homeClose {
         position: fixed;
@@ -46,7 +35,6 @@
         text-align: center;
         -moz-box-sizing: border-box;
         box-sizing: border-box;
-        // background: red;
 
         @include narrow-screen {
             height: $header-height-smartphone;
@@ -63,8 +51,6 @@
         right: $hamburger-margin;
         width: $hamburger-width;
         height: $hamburger-height;
-
-        // background: #333;
 
         cursor: pointer;
 

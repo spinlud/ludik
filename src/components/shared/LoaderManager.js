@@ -6,12 +6,12 @@
 
 "use strict"
 
-const T = THREE
-require("./GLTFLoader.js")
-require("./DRACOLoader.js")
-require("./TTFLoader.js")
+import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { TTFLoader } from 'three/addons/loaders/TTFLoader.js'
+import { FontLoader } from 'three/addons/loaders/FontLoader.js'
 
-export default class LoaderManager extends T.EventDispatcher {
+export default class LoaderManager extends THREE.EventDispatcher {
 
     constructor (itemsTotal) {
 
@@ -31,7 +31,7 @@ export default class LoaderManager extends T.EventDispatcher {
             error: "ERROR"
         }
 
-        this.manager = new T.LoadingManager()
+        this.manager = new THREE.LoadingManager()
 
         this.manager.onLoad = () => {
 
@@ -63,12 +63,13 @@ export default class LoaderManager extends T.EventDispatcher {
 
         }
 
-        this.textureLoader = LoaderManager.promisifyLoader(new T.TextureLoader(this.manager))
-        this.gltfLoader = LoaderManager.promisifyLoader(new T.GLTFLoader(this.manager))
-        this.cubeTextureLoader = LoaderManager.promisifyLoader(new T.CubeTextureLoader(this.manager))
-        this.audioLoader = LoaderManager.promisifyLoader(new T.AudioLoader(this.manager))
-        this.fontLoader = LoaderManager.promisifyLoader(new T.FontLoader(this.manager))
-        this.ttfLoader = LoaderManager.promisifyLoader(new T.TTFLoader(this.manager))
+        this.textureLoader = LoaderManager.promisifyLoader(new THREE.TextureLoader(this.manager))
+        this.cubeTextureLoader = LoaderManager.promisifyLoader(new THREE.CubeTextureLoader(this.manager))
+        this.audioLoader = LoaderManager.promisifyLoader(new THREE.AudioLoader(this.manager))
+
+        this.gltfLoader = LoaderManager.promisifyLoader(new GLTFLoader(this.manager))
+        this.ttfLoader = LoaderManager.promisifyLoader(new TTFLoader(this.manager))
+        this.fontLoader = LoaderManager.promisifyLoader(new FontLoader(this.manager))
     }
 
     /**

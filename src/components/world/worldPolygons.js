@@ -4,7 +4,7 @@
  * ---------------------------------------------------------------------------------------
  */
 
-const T = THREE
+import * as THREE from 'three'
 
 const LEVEL_VERTICES = "[\n" +
     "    [\n" +
@@ -213,7 +213,7 @@ const COMMAND_CONSOLE_VERTICES = "[\n" +
     "]"
 
 // flip Y (Z) axis because of Blender different orientation
-const levelPolyV3 = JSON.parse(LEVEL_VERTICES).map(e => new T.Vector3(e[0][0], 0, e[0][1] * -1))
-const commandConsolePolyV3 = JSON.parse(COMMAND_CONSOLE_VERTICES).map(e => new T.Vector3(e[0][0], 0, e[0][1] * -1))
+const levelPolyV3 = JSON.parse(LEVEL_VERTICES).map(e => new THREE.Vector3(e[0][0], 0, e[0][1] * -1))
+const commandConsolePolyV3 = JSON.parse(COMMAND_CONSOLE_VERTICES).map(e => new THREE.Vector3(e[0][0], 0, e[0][1] * -1))
 
 export {levelPolyV3 as LEVEL_POLY, commandConsolePolyV3 as COMMAND_CONSOLE_POLY}

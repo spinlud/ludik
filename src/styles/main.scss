@@ -1,21 +1,13 @@
-// Vendors
-//@import "susy";
+/*
+ * ---------------------------------------------------------------------------------------
+ * main.scss
+ *
+ * Global styles entrypoint. The shared helpers (variables / colors / mixins) are injected
+ * into every stylesheet via Vite's `css.preprocessorOptions.scss.additionalData`.
+ * ---------------------------------------------------------------------------------------
+ */
 
-// Helpers
-@import "helpers/variables";
-@import "helpers/colors";
-@import "helpers/mixins";
-
-// Base
-@import "base/reset";
-@import "base/typography";
-@import "base/base";
-
-
-
-
-
-
-
-
-
+@use "base/reset";
+@use "base/base";
+@use "base/typography";
+@use "home";

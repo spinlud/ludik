@@ -19,8 +19,7 @@
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/helpers/colors";
+    @use "sass:color";
 
     .scifi-loader{
         list-style: none;
@@ -50,7 +49,7 @@
             border: 2px solid;
             animation: rotation-z 2s linear 0s infinite;
             color: #ccccff;
-            box-shadow: 0px 0px 4px 4px lighten(#ccccff, 2%);
+            box-shadow: 0px 0px 4px 4px color.adjust(#ccccff, $lightness: 2%);
             opacity: 0.2;
         }
 

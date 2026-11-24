@@ -2,40 +2,45 @@
     <div id="singles" class="home-root">
         <span class="home-title">SINGLES</span>
         <div class="home-content">
-            <p class="home-text justify-text">
-                Nothing to show yet. <br>
-                Content will be added as soon as available. <br>
-                Stay tuned! (ツ)_.\m/
-            </p>
+            <ul>
+                <ReleaseEntry v-for="single in singles" :key="single.title"
+                    :title="single.title" :release-date="single.releaseDate" :artwork="single.artwork"
+                    :player="single.player" :description="single.description" />
+            </ul>
         </div>
     </div>
 </template>
 
-<script>
-    export default {
-        name: "Singles",
+<script setup>
 
-        props: {
-            scroll: {
-                type: Boolean,
-                default: false
-            }
-        },
+    import { onMounted } from "vue"
+    import ReleaseEntry from "../release/ReleaseEntry.vue"
 
-        mounted () {
-
-            if (this.scroll) {
-
-                $("#singles .home-title")[0].scrollIntoView({behavior: "smooth", block: "center"})
-
-            }
-
+    const props = defineProps({
+        scroll: {
+            type: Boolean,
+            default: false
         }
-    }
+    })
+
+    const singles = [
+        {
+            title: "The Rise Of The Zombies",
+            releaseDate: "08-2021",
+            player: "tracks/1102903111",
+            artwork: "/assets/images/singles/the-rise-of-the-zombies-500.jpg",
+            description: "Song for the #tombjam competition! Zombies are coming! (ツ)_.\\m/"
+        }
+    ]
+
+    onMounted(() => {
+        if (props.scroll) {
+            const title = document.querySelector("#singles .home-title")
+            title && title.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
+    })
+
 </script>
 
 <style scoped lang="scss">
-
-    @import "../home-style";
-
 </style>
