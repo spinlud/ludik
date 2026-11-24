@@ -2,17 +2,20 @@
 // Boots the app, passes the click-to-start gate, walks the player into the
 // stargate so the World stops and Home is revealed, then runs named checks.
 // Prints PASS/FAIL per check and exits non-zero on any failure.
-// Usage: node smoke-home.js <baseUrl> [outDir]
+// Runs headless with a stubbed Pointer Lock API, so it never captures the
+// real mouse cursor or steals window focus. Pass --headed to watch the run.
+// Usage: node smoke-home.js <baseUrl> [outDir] [--headed]
 
 const { chromium } = require("playwright")
 const fs = require("fs")
 const path = require("path")
 
-const baseUrl = process.argv[2]
-const outDirArg = process.argv[3] || "smoke-home"
+const args = process.argv.slice(2)
+const headed = args.includes("--headed")
+const [baseUrl, outDirArg = "smoke-home"] = args.filter((a) => a !== "--headed")
 
 if (!baseUrl) {
-    console.error("Usage: node smoke-home.js <baseUrl> [outDir]")
+    console.error("Usage: node smoke-home.js <baseUrl> [outDir] [--headed]")
     process.exit(1)
 }
 
@@ -21,6 +24,27 @@ fs.mkdirSync(outDir, { recursive: true })
 
 const VIEWPORT = { width: 1280, height: 800 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Fakes a granted pointer lock: the app sees the canvas as locked and gets its
+// pointerlockchange events, but the browser never captures the OS cursor.
+// The checks move the player through the parity hook, not mouse-look.
+function stubPointerLock () {
+    let lockedElement = null
+    const notify = () => setTimeout(() => document.dispatchEvent(new Event("pointerlockchange")), 0)
+    Object.defineProperty(Document.prototype, "pointerLockElement", {
+        configurable: true,
+        get: () => lockedElement,
+    })
+    Element.prototype.requestPointerLock = function () {
+        lockedElement = this
+        notify()
+        return Promise.resolve()
+    }
+    Document.prototype.exitPointerLock = function () {
+        lockedElement = null
+        notify()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Boot: loading screen -> click-to-start gate -> World -> stargate -> Home
@@ -317,8 +341,14 @@ checks.releaseLayout = async (h) => {
 ;(async () => {
     const consoleLines = []
     const results = []
-    const browser = await chromium.launch({ headless: false })
+    // Headless Chromium falls back to software WebGL, which pegs every CPU
+    // core; on macOS these flags keep WebGL on the GPU through Metal.
+    const gpuArgs = process.platform === "darwin"
+        ? ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"]
+        : []
+    const browser = await chromium.launch({ headless: !headed, args: gpuArgs })
     const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
+    await context.addInitScript(stubPointerLock)
     const page = await context.newPage()
     page.on("console", (msg) => consoleLines.push(`[${msg.type()}] ${msg.text()}`))
     page.on("pageerror", (err) => consoleLines.push(`[pageerror] ${err.message}`))
