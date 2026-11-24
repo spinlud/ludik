@@ -221,6 +221,23 @@ checks.djSets = async (h) => {
     await assertSection("hamburger")
 }
 
+// --- check: singles ---
+// Singles lists The Rise Of The Zombies first, with its SoundCloud player.
+checks.singles = async (h) => {
+    await h.gotoRoute("/singles")
+    const titles = await h.page.$$eval("#singles .release-title", (els) => els.map((e) => e.textContent.trim()))
+    if (titles[0] !== "The Rise Of The Zombies") throw new Error(`first single is ${JSON.stringify(titles[0])}`)
+    const date = await h.page.$eval("#singles .release-date", (e) => e.textContent.trim())
+    if (date !== "08-2021") throw new Error(`release date is ${JSON.stringify(date)}`)
+    const sc = await h.iframes("#singles")
+    if (!sc[0] || !sc[0].startsWith("https://w.soundcloud.com/player/") || !sc[0].includes("tracks%2F1102903111")) {
+        throw new Error(`expected the Zombies player first, got ${JSON.stringify(sc)}`)
+    }
+    const art = await h.page.$eval("#singles .release-artwork", (e) => e.complete && e.naturalWidth > 0)
+    if (!art) throw new Error("artwork did not load")
+    await h.page.locator("#singles").screenshot({ path: path.join(outDir, "singles.png") })
+}
+
 // ---------------------------------------------------------------------------
 
 ;(async () => {
