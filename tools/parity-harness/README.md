@@ -100,3 +100,14 @@ Comparing dark-region crops numerically has been effective for spotting chroma-n
 artifacts — e.g. take the std-dev of the red-minus-green channel difference over a
 dark crop of each image and compare the two runs. A clean scene shows near-zero
 chroma variance in dark regions; noise artifacts raise it.
+
+## Home smoke checks (`smoke-home.js`)
+
+`node smoke-home.js <baseUrl> [outDir]` (dev server only: it needs the
+`window.__ludikParity` hook). It passes the click-to-start gate, then teleports the
+player onto the bridge and into the stargate so the World stops and Home is
+revealed the real way (~35s total). It then runs each named function in `checks`,
+prints `PASS <name>` / `FAIL <name>: <reason>` and exits non-zero on any failure.
+Screenshots and `console.txt` go to `captures/<outDir>` (default `smoke-home`).
+Checks get helpers: `viaRing(displayName)`, `viaHamburger(label)`,
+`gotoRoute(path)` (adds `?scroll=true`), `iframes(selector)`, `screenshot(name)`.
