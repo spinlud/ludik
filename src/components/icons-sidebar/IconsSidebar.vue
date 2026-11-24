@@ -15,33 +15,19 @@
 
 </template>
 
-<script>
-    export default {
-        name: "IconsSidebar",
+<script setup>
 
-        data () {
-            return {
-                isSidebarOpen: false
-            }
-        },
+    import { ref } from "vue"
 
-        methods: {
+    const isSidebarOpen = ref(false)
 
-            toggleSidebar () {
-                this.isSidebarOpen = !this.isSidebarOpen
-            }
-
-        }
+    function toggleSidebar () {
+        isSidebarOpen.value = !isSidebarOpen.value
     }
+
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/base/reset";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
 
     #iconsSidebar {
         position: fixed;
@@ -113,11 +99,11 @@
     }
 
     .close-handle {
-        background-image: url(../../../assets/images/icons/icons8-double-right-50.png);
+        background-image: url(/assets/images/icons/icons8-double-right-50.png);
     }
 
     .open-handle {
-        background-image: url(../../../assets/images/icons/icons8-double-left-50.png);
+        background-image: url(/assets/images/icons/icons8-double-left-50.png);
     }
 
     .icon-link {
@@ -138,31 +124,31 @@
     }
 
     #spotifyLink {
-        background-image: url(../../../assets/images/icons/icons8-spotify-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-spotify-filled-50.png);
     }
 
     #youtubeLink {
-        background-image: url(../../../assets/images/icons/icons8-youtube-squared-50.png);
+        background-image: url(/assets/images/icons/icons8-youtube-squared-50.png);
     }
 
     #twitterLink {
-        background-image: url(../../../assets/images/icons/icons8-twitter-squared-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-twitter-squared-filled-50.png);
     }
 
     #facebookLink {
-        background-image: url(../../../assets/images/icons/icons8-facebook-circled-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-facebook-circled-filled-50.png);
     }
 
     #instagramLink {
-        background-image: url(../../../assets/images/icons/icons8-instagram-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-instagram-filled-50.png);
     }
 
     #mailLink {
-        background-image: url(../../../assets/images/icons/icons8-post-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-post-filled-50.png);
     }
 
     #githubLink {
-        background-image: url(../../../assets/images/icons/icons8-github-filled-50.png);
+        background-image: url(/assets/images/icons/icons8-github-filled-50.png);
     }
 
 </style>

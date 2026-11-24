@@ -6,8 +6,7 @@
  * ---------------------------------------------------------------------------------------
  */
 
-const DAT = require("dat.gui")
-const T = THREE
+import * as THREE from 'three'
 
 /**
  * Check if the current device has touch support.
@@ -74,25 +73,25 @@ function isDomElement (obj) {
 }
 
 /**
- * Execute a function for each object in the scene graph.
+ * Recursively traverse an object3D graph applying a function to every node.
  *
- * @param obj
- * @param fn
+ * @param obj Root object3D
+ * @param fn Function applied to each node
  */
-function sceneTraverse(obj, fn) {
+function sceneTraverse (obj, fn) {
     if (!obj) return
 
-    fn(obj);
+    fn(obj)
 
     if (obj.children && obj.children.length > 0) {
         obj.children.forEach(o => {
-            sceneTraverse(o, fn);
-        });
+            sceneTraverse(o, fn)
+        })
     }
 }
 
 /**
- * Test if given position is inside polygon
+ * Test if given position is inside polygon.
  *
  * @param nvert Number of vertices
  * @param vertX Polygon vertices x coordinate (connection order)
@@ -101,38 +100,58 @@ function sceneTraverse(obj, fn) {
  * @param testY Position to test y coordinate
  * @returns {boolean}
  */
-function isInsidePolygon(nvert, vertX, vertY, testX, testY) {
+function isInsidePolygon (nvert, vertX, vertY, testX, testY) {
     let res = false
-    let i, j;
+    let i, j
 
     for (i = 0, j = nvert - 1; i < nvert; j = i++) {
-        if ( ((vertY[i] > testY) !== (vertY[j] > testY) ) &&
-            (testX < (vertX[j] - vertX[i]) * (testY - vertY[i]) / (vertY[j] - vertY[i]) + vertX[i]) )
-            res = !res;
+        if (((vertY[i] > testY) !== (vertY[j] > testY)) &&
+            (testX < (vertX[j] - vertX[i]) * (testY - vertY[i]) / (vertY[j] - vertY[i]) + vertX[i]))
+            res = !res
     }
 
-    return res;
+    return res
 }
 
 /**
- * Computes polygon data from rectangular mesh
+ * Computes polygon data from rectangular mesh.
+ *
+ * Builds the oriented rectangle in world space directly from the mesh local
+ * bounding box transformed by its world matrix. The world matrix already
+ * carries the level root rotation, so no additional rotation is applied.
+ *
  * @param obj3D Rectangular mesh in 3D space
- * @param quaternion Rotation to apply to polygon points
  * @returns {{vertY: *[], vertX: *[], nvert: number}} Polygon data
  */
-function polygonFromRect (obj3D, quaternion, scene) {
-    if (!obj3D instanceof THREE.Object3D) {
+function polygonFromRect (obj3D) {
+    if (!(obj3D instanceof THREE.Object3D)) {
         throw "Object must be instance of THREE.Object3D"
     }
 
-    // Create Box3 from object position, rotation and scale
-    const box = new T.Box3().setFromObject(obj3D)
+    // Resolve the mesh carrying the geometry (the trigger is a box mesh)
+    let mesh = obj3D
+    if (!mesh.geometry) {
+        obj3D.traverse(o => { if (!mesh.geometry && o.geometry) mesh = o })
+    }
+    if (!mesh.geometry) {
+        throw "Object must contain geometry"
+    }
 
-    // Extract vertices from bounding box and apply level rotation
-    const x1z1 = new T.Vector3(box.max.x, 0, box.max.z).applyQuaternion(quaternion)
-    const x2z2 = new T.Vector3(box.min.x, 0, box.min.z).applyQuaternion(quaternion)
-    const x1z2 = new T.Vector3(box.max.x, 0, box.min.z).applyQuaternion(quaternion)
-    const x2z1 = new T.Vector3(box.min.x, 0, box.max.z).applyQuaternion(quaternion)
+    // Make sure the world matrix is current
+    obj3D.updateWorldMatrix(true, true)
+
+    // Local-space bounding box of the rectangular mesh
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+    const box = mesh.geometry.boundingBox
+
+    // Rectangle corners in the mesh local frame, transformed to world space.
+    // The world matrix bakes in the level root rotation, producing the true
+    // oriented rectangle without any extra rotation.
+    const y = box.min.y
+    const x1z1 = new THREE.Vector3(box.max.x, y, box.max.z).applyMatrix4(mesh.matrixWorld)
+    const x2z2 = new THREE.Vector3(box.min.x, y, box.min.z).applyMatrix4(mesh.matrixWorld)
+    const x1z2 = new THREE.Vector3(box.max.x, y, box.min.z).applyMatrix4(mesh.matrixWorld)
+    const x2z1 = new THREE.Vector3(box.min.x, y, box.max.z).applyMatrix4(mesh.matrixWorld)
 
     return {
         nvert: 4,
@@ -157,29 +176,6 @@ function wait (ms) {
     })
 }
 
-/**
- * Utility to generate dat.gui from configuration object (only for ranges min-max).
- * conf is an Array of Objects {name, <propName>, mix, max, cb} where propName key is equal to name:
- * [
- * {
-                    name: "threshold",
-                    threshold: 0.01,
-                    min: 0.0,
-                    max: 1.0,
-                    cb: (v) => { unrealBloomPass.threshold = v }
-                }
- * ]
- */
-function initDatGUI (conf) {
-    const gui = new DAT.GUI();
-    $( ".dg.ac" ).css("zIndex", "99");
-
-    for (let o of conf) {
-        // console.log(o);
-        gui.add(o, o.name).min(o.min).max(o.max).step(o.step ? o.step : 0.1).onChange(v => {o.cb(v)})
-    }
-}
-
 export {
     isTouchDevice,
     isiOS,
@@ -189,6 +185,5 @@ export {
     sceneTraverse,
     isInsidePolygon,
     polygonFromRect,
-    wait,
-    initDatGUI
+    wait
 }

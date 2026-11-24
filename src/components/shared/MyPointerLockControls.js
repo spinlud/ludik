@@ -3,6 +3,8 @@
  * @author Mugen87 / https://github.com/Mugen87
  */
 
+import * as THREE from 'three'
+
 const MyPointerLockControls = function ( camera, domElement, cameraOffsetY ) {
 
     var scope = this;

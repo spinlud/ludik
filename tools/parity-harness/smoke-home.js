@@ -338,6 +338,30 @@ checks.releaseLayout = async (h) => {
 
 // ---------------------------------------------------------------------------
 
+// --- check: legacyHashRedirect ---
+// A fresh load of a legacy hash URL lands on the equivalent history-mode path:
+// the hash is gone and the router's first navigation targets that path. The
+// app has no /releases route, so /albums stands in; on a fresh load the router
+// guard sends the uninitialized app to "/", recorded in redirectedFrom.
+// It opens its own page because the check needs a fresh load, which gotoRoute
+// on the already-initialized main page cannot give.
+checks.legacyHashRedirect = async (h) => {
+    const page = await h.page.context().newPage()
+    try {
+        await page.goto(`${baseUrl}/#/albums?scroll=true`, { waitUntil: "domcontentloaded" })
+        const state = await page.waitForFunction(() => {
+            const app = document.querySelector("#app").__vue_app__
+            const route = app && app.config.globalProperties.$router.currentRoute.value
+            if (!route || route.matched.length === 0) return null
+            return { hash: location.hash, from: route.redirectedFrom ? route.redirectedFrom.fullPath : null }
+        }, null, { timeout: 30000 }).then((handle) => handle.jsonValue())
+        if (state.hash !== "") throw new Error(`hash still present: ${state.hash}`)
+        if (state.from !== "/albums?scroll=true") throw new Error(`first navigation was ${state.from}, expected /albums?scroll=true`)
+    } finally {
+        await page.close()
+    }
+}
+
 ;(async () => {
     const consoleLines = []
     const results = []
@@ -349,9 +373,10 @@ checks.releaseLayout = async (h) => {
     const browser = await chromium.launch({ headless: !headed, args: gpuArgs })
     const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
     await context.addInitScript(stubPointerLock)
+    // Context-level listeners also capture pages that checks open themselves
+    context.on("console", (msg) => consoleLines.push(`[${msg.type()}] ${msg.text()}`))
+    context.on("weberror", (err) => consoleLines.push(`[pageerror] ${err.error().message}`))
     const page = await context.newPage()
-    page.on("console", (msg) => consoleLines.push(`[${msg.type()}] ${msg.text()}`))
-    page.on("pageerror", (err) => consoleLines.push(`[pageerror] ${err.message}`))
 
     try {
         await passGate(page)

@@ -51,7 +51,12 @@
 
 <script>
 
-    import { states, mutations } from "../../store/storeUtils"
+    import * as THREE from "three"
+    import TWEEN from "@tweenjs/tween.js"
+    import STATS from "stats-js"
+
+    import { states } from "@/stores/storeUtils"
+    import { useAppStore } from "@/stores/app"
     import EventManager from "../shared/EventManager"
     import LoaderManager from "../shared/LoaderManager"
     import TouchManager from "../shared/TouchManager"
@@ -65,14 +70,14 @@
       isInsidePolygon,
       polygonFromRect,
       wait,
-      initDatGUI, isiOS
+      isiOS
     }
       from "../shared/utils"
 
     import { MyDeviceOrientationControls } from "../shared/MyDeviceOrientationControls"
     import { MyPointerLockControls } from "../shared/MyPointerLockControls.js"
 
-    import { Pathfinding, PathfindingHelper } from "three-pathfinding-alias"
+    import { Pathfinding, PathfindingHelper } from "three-pathfinding"
 
     import {
         BloomEffect,
@@ -81,12 +86,15 @@
         BrightnessContrastEffect,
         HueSaturationEffect,
         SMAAEffect,
+        SMAAPreset,
+        EdgeDetectionMode,
         RenderPass,
         EffectPass,
         EffectComposer,
-        BlendFunction
+        BlendFunction,
+        Effect
     }
-        from "postprocessing-alias"
+        from "postprocessing"
 
     import System, {
         Emitter,
@@ -105,13 +113,7 @@
         Scale,
         Color,
         SpriteRenderer
-    } from "three-nebula-alias"
-
-    const T = THREE
-    const TWEEN = require("@tweenjs/tween.js")
-    const SCREENFULL = require("screenfull")
-    const STATS = require("stats-js")
-    const THREEx = require("../shared/threex.stats.js")
+    } from "three-nebula"
 
     const TAG = "[World]"
 
@@ -124,9 +126,124 @@
         na: "NA"
     }
 
+    // Scale factor approximating the pre-r155 (non physically-correct) lighting model for direct lights
+    const LEGACY_LIGHT_INTENSITY_SCALE = Math.PI
+
+    // Ambient fill strength: the original r104 ambient intensity carried over unchanged.
+    // The LEGACY_LIGHT_INTENSITY_SCALE (pi) factor applied below supplies the compensation for
+    // r155's physically-correct light units, so no further lift above the r104 value is needed.
+    const AMBIENT_INTENSITY = 0.4
+
+    // Command-room point light falloff, matched to the pre-r155 non-physical curve. r104 used
+    // falloff = (1 - d/distance)^decay, i.e. (1 - d/100)^2: nearly flat across a room and still
+    // significant far away (0.81 at d=10, 0.64 at d=20, 0.49 at d=30, 0.36 at d=40). This warm gold
+    // light (R-dominant) therefore washed the whole ship in a warm tint. Modern three uses a physical
+    // 1/d^decay curve, so the original decay=2 collapses this to near-zero within a few metres, which
+    // both darkens the command room and, by removing the R-dominant long-range wash, tilts distant
+    // corridors toward green. A low decay restores the flat, far-reaching old profile; the intensity
+    // is tuned (against the reference captures) so the command-room mean and the long-range corridor
+    // warmth both match the original. Intensity carries the r155 physically-correct-lights
+    // compensation (~pi) folded into the fitted value.
+    const POINT_LIGHT1_DISTANCE = 100
+    const POINT_LIGHT1_DECAY = 0.6
+    const POINT_LIGHT1_INTENSITY = 4.0
+
+    // Warm gold shared by all scene lights. Authored as a raw (linear) hex to match the pre-r152
+    // pipeline, which used code-set hex values directly. Modern ColorManagement would otherwise
+    // convert this warm tone from sRGB to linear, dimming and over-saturating it.
+    const LEGACY_WARM_LIGHT_HEX = 0xFFBF4D
+
+    // Bloom is weighted softly across the whole luminance range (no hard cutoff): a zero threshold
+    // with full smoothing reproduces the linear luminance weighting of the previous pipeline.
+    const BLOOM_LUMINANCE_THRESHOLD = 0.0
+    const BLOOM_LUMINANCE_SMOOTHING = 1.0
+    // Resolution scale of the Kawase blur render target.
+    const BLOOM_RESOLUTION_SCALE = 0.7
+    // Strength of the screen-blended bloom overlay.
+    const BLOOM_OPACITY = 1.2
+
+    // Resolution scale of the god-rays blur and ray targets.
+    const GODRAYS_RESOLUTION_SCALE = 0.28
+
+    // Translucent level glass kept out of the depth buffer so the god-rays light pass sees the sun through it.
+    const GODRAYS_TRANSPARENT_MATERIAL = "Glass_mod"
+
+    // Output gamma matching three r104's gammaOutput/gammaFactor=2.2 encode.
+    const LEGACY_OUTPUT_GAMMA = 2.2
+
+    // Emulation of r104's gammaOutput/gammaFactor=2.2 output curve. r104 encoded the final image
+    // with a pure pow(1/2.2); three@0.185 instead uses the true sRGB OETF (a 1.055*pow(x,1/2.4)-0.055
+    // curve with a linear toe), which is substantially darker at low luminance and identical at high
+    // luminance. This replaces ONLY the sRGBTransferOETF function body in the colorspace_pars_fragment
+    // shader chunk with the legacy pure-gamma curve, restoring visual parity with the original build.
+    // It touches the ENCODE path only: sRGBTransferEOTF (sRGB texture decode) and LinearTransferOETF
+    // are left exactly as shipped, so texture color is unaffected (a prior attempt that also patched
+    // those corrupted sRGB decode and produced a green tint). This affects every draw encoded for the
+    // screen; the postprocessing chain encodes with LegacyGammaEncodeEffect instead (see below).
+    function applyLegacyOutputGamma () {
+
+        const chunk = THREE.ShaderChunk.colorspace_pars_fragment
+
+        const shippedOETFBody =
+            "return vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a );"
+
+        const legacyOETFBody = `return vec4( pow( value.rgb, vec3( 1.0 / ${LEGACY_OUTPUT_GAMMA} ) ), value.a );`
+
+        if (!chunk.includes(shippedOETFBody)) {
+            console.error(`${TAG} applyLegacyOutputGamma: expected sRGBTransferOETF body not found in colorspace_pars_fragment; leaving shader chunk untouched`)
+            return
+        }
+
+        THREE.ShaderChunk.colorspace_pars_fragment = chunk.replace(shippedOETFBody, legacyOETFBody)
+
+    }
+
+    // Postprocessing working space. r104 (gammaOutput + gammaFactor 2.2) gamma-encoded every
+    // render-target write, scene and god-rays light pass alike, into 8-bit buffers. So the original
+    // effects chain operated on gamma-encoded values clamped to [0, 1], and its final pass was a
+    // passthrough. The composer reproduces that: the scene renders linear, LegacyGammaEncodeEffect
+    // clamps and encodes right after it, every effect runs on the encoded values with no color
+    // space conversions, and the last pass writes to screen without encoding.
+    const LEGACY_GAMMA_ENCODE_GLSL =
+        `pow( clamp( LEGACY_COLOR, 0.0, 1.0 ), vec3( ${(1.0 / LEGACY_OUTPUT_GAMMA).toFixed(6)} ) )`
+
+    class LegacyGammaEncodeEffect extends Effect {
+
+        constructor () {
+            super(
+                "LegacyGammaEncodeEffect",
+                "void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {\n" +
+                `    outputColor = vec4(${LEGACY_GAMMA_ENCODE_GLSL.replace("LEGACY_COLOR", "inputColor.rgb")}, inputColor.a);\n` +
+                "}\n",
+                { blendFunction: BlendFunction.SRC }
+            )
+            this.inputColorSpace = null
+        }
+
+    }
+
+    // Make a material write gamma-encoded color, as r104 did when rendering into a render target.
+    // Used for the god-rays light source, which postprocessing renders into its own target.
+    function encodeMaterialOutputAsLegacyGamma (material) {
+
+        material.onBeforeCompile = (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+                /}\s*$/,
+                `    gl_FragColor.rgb = ${LEGACY_GAMMA_ENCODE_GLSL.replace("LEGACY_COLOR", "gl_FragColor.rgb")};\n}`
+            )
+        }
+        material.customProgramCacheKey = () => "legacy-gamma-output"
+
+    }
+
     export default {
 
         name: "World",
+
+        setup () {
+            // Expose the Pinia store to the Options API (`this.store`).
+            return { store: useAppStore() }
+        },
 
         data () {
 
@@ -147,7 +264,9 @@
                     checked: false,
                     handler: () => {
 
-                        this.postProcessingPasses["aaPass"].enabled = !this.postProcessingPasses["aaPass"].enabled
+                        this.withPostProcessingEntry(this.postProcessingPasses, "aaPass", aaPass => {
+                            aaPass.enabled = !aaPass.enabled
+                        })
 
                     }
                 }
@@ -222,10 +341,11 @@
                         step: 0.001,
                         value: 0.140,
                         default: 0.140,
-                        valueFormatted: Number(0.036).toFixed(3),
+                        valueFormatted: Number(0.140).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["brightnessContrastEffect"]
-                                .uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
+                            this.withPostProcessingEntry(this.postProcessingEffects, "brightnessContrastEffect", effect => {
+                                effect.uniforms.get("brightness").value = this.commandPanelSliders.brightness.value
+                            })
 
                             this.commandPanelSliders.brightness.valueFormatted =
                                 Number(this.commandPanelSliders.brightness.value).toFixed(3)
@@ -241,8 +361,9 @@
                         default: 0.400,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["brightnessContrastEffect"]
-                                .uniforms.get("contrast").value = this.commandPanelSliders.contrast.value
+                            this.withPostProcessingEntry(this.postProcessingEffects, "brightnessContrastEffect", effect => {
+                                effect.uniforms.get("contrast").value = this.commandPanelSliders.contrast.value
+                            })
 
                             this.commandPanelSliders.contrast.valueFormatted =
                                 Number(this.commandPanelSliders.contrast.value).toFixed(3)
@@ -258,7 +379,9 @@
                         default: 0.000,
                         valueFormatted: Number(0.000).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["hueSaturationEffect"].setHue(this.commandPanelSliders.hue.value)
+                            this.withPostProcessingEntry(this.postProcessingEffects, "hueSaturationEffect", effect => {
+                                effect.setHue(this.commandPanelSliders.hue.value)
+                            })
 
                             this.commandPanelSliders.hue.valueFormatted =
                                 Number(this.commandPanelSliders.hue.value).toFixed(3)
@@ -274,8 +397,9 @@
                         default: 0.750,
                         valueFormatted: Number(0.200).toFixed(3),
                         handler: () => {
-                            this.postProcessingEffects["hueSaturationEffect"]
-                                .uniforms.get("saturation").value = this.commandPanelSliders.saturation.value
+                            this.withPostProcessingEntry(this.postProcessingEffects, "hueSaturationEffect", effect => {
+                                effect.uniforms.get("saturation").value = this.commandPanelSliders.saturation.value
+                            })
 
                             this.commandPanelSliders.saturation.valueFormatted =
                                 Number(this.commandPanelSliders.saturation.value).toFixed(3)
@@ -295,13 +419,21 @@
 
             worldState() {
 
-                return this.$store.state.worldState
+                return this.store.worldState
 
             },
 
         },
 
         methods: {
+
+            /**
+             * Call apply with the postprocessing effect or pass registered under key, if any.
+             */
+            withPostProcessingEntry (registry, key, apply) {
+                const entry = registry[key]
+                if (entry) apply(entry)
+            },
 
 
             /**
@@ -341,12 +473,12 @@
                     this.consoleMessageDisplayed = true
                 }
 
-                const worldConsoleMessage = $("#worldConsoleMessage")
+                const worldConsoleMessage = document.getElementById("worldConsoleMessage")
                 const charTimeout = 40
                 const phraseTimeoutShort = 200 // , : ;
                 const phraseTimeoutLong = 1000 // . ! ?
 
-                const sound = new T.Audio(new T.AudioListener())
+                const sound = new THREE.Audio(new THREE.AudioListener())
                 sound.setLoop(false)
                 sound.setVolume(0.01)
 
@@ -371,13 +503,13 @@
 
                     // Cancel in case of another transition has been started (stargate)
                     if (this.isTransitionRunning) {
-                        worldConsoleMessage.html("")
+                        worldConsoleMessage.innerHTML = ""
                         return
                     }
 
                     let message = ""
                     let char
-                    worldConsoleMessage.html(message)
+                    worldConsoleMessage.innerHTML = message
 
                     for (let i = 0; i < phrase.length; ++i) {
 
@@ -394,7 +526,7 @@
                         sound.isPlaying && sound.stop()
                         sound.setBuffer(buffers[i % buffers.length])
                         !this.isTransitionRunning && char !== " " && sound.play()
-                        worldConsoleMessage.html(message)
+                        worldConsoleMessage.innerHTML = message
 
                         switch (char) {
 
@@ -433,7 +565,7 @@
 
                 // Cancel in case of another transition has been started (stargate)
                 if (this.isTransitionRunning) {
-                    worldConsoleMessage.html("")
+                    worldConsoleMessage.innerHTML = ""
                     return
                 }
 
@@ -443,7 +575,7 @@
 
                 // Wait for css transition close then reset console message
                 await wait(1000)
-                worldConsoleMessage.html("")
+                worldConsoleMessage.innerHTML = ""
 
             },
 
@@ -456,35 +588,22 @@
 
                 const createBloomEffect = () => {
 
-                    const bloomParams = [
-                        {
-                            name: "resolution",
-                            resolution: 0.7,
-                            min: 0.00,
-                            max: 1.00,
-                            cb: (v) => { bloomEffect.setResolutionScale(v) }
-                        },
-                        {
-                            name: "distinction",
-                            distinction: 1.0,
-                            min: 1.0,
-                            max: 10.0,
-                            cb: (v) => { bloomEffect.distinction = v }
-                        },
-                        {
-                            name: "opacity",
-                            opacity: 1.2,
-                            min: 0.0,
-                            max: 4.0,
-                            cb: (v) => { bloomEffect.blendMode.opacity.value = v }
-                        },
-                    ]
+                    const bloomEffect = new BloomEffect({
+                        blendFunction: BlendFunction.SCREEN,
+                        // Nearest 6.39.4 analogue of 6.3.2's distinction = 1.0: continuous
+                        // pow(luminance, 1) weighting with no threshold. The exact weighting
+                        // is not expressible in the new API.
+                        luminanceThreshold: BLOOM_LUMINANCE_THRESHOLD,
+                        luminanceSmoothing: BLOOM_LUMINANCE_SMOOTHING,
+                        intensity: 1.0,
+                        // Disable the mipmap blur (default in 6.39.4) so the Kawase
+                        // LARGE blur runs, matching the vendored 6.3.2 original.
+                        mipmapBlur: false,
+                        kernelSize: KernelSize.LARGE,
+                        resolutionScale: BLOOM_RESOLUTION_SCALE
+                    })
 
-                    const bloomEffect = new BloomEffect()
-                    bloomEffect.setResolutionScale(bloomParams[0].resolution)
-                    bloomEffect.distinction = bloomParams[1].distinction
-                    bloomEffect.blendMode.opacity.value = bloomParams[2].opacity
-                    // initDatGUI(bloomParams)
+                    bloomEffect.blendMode.opacity.value = BLOOM_OPACITY
 
                     return bloomEffect
 
@@ -492,29 +611,53 @@
 
                 const createGodRayEffect = async () => {
 
-                    const sunMaterial = new T.PointsMaterial({
+                    const sunMaterial = new THREE.PointsMaterial({
                         map: await this.loaderManager.loadTexture("assets/textures/sun.png"),
                         size: 100,
                         sizeAttenuation: true,
-                        color: 0xffddaa,
+                        // Build the color bypassing ColorManagement: r104 fed the raw hex
+                        // into the shader, so ColorManagement's sRGB->linear conversion
+                        // would shift the rendered disc from pale yellow toward ocher.
+                        color: new THREE.Color().setHex(0xffddaa, THREE.LinearSRGBColorSpace),
                         alphaTest: 0,
                         transparent: true,
+                        // Depth-free like the original, where GodRaysEffect cleared depthWrite on
+                        // this material: the god-rays light pass depth-tests its own copy of the
+                        // sun against the scene depth, which must not contain the sun sprite.
+                        depthWrite: false,
                         fog: false
                     })
 
-                    const sunGeometry = new T.BufferGeometry()
-                    sunGeometry.addAttribute("position", new T.BufferAttribute(new Float32Array(3), 3))
-                    const sun = new T.Points(sunGeometry, sunMaterial)
+                    const sunGeometry = new THREE.BufferGeometry()
+                    sunGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3), 3))
+                    const sun = new THREE.Points(sunGeometry, sunMaterial)
                     sun.frustumCulled = false
-                    // const position = new T.Vector3(0, 0, -150)
-                    const position = new T.Vector3(0, 0, 1000)
+                    // const position = new THREE.Vector3(0, 0, -150)
+                    const position = new THREE.Vector3(0, 0, 1000)
                     position.applyQuaternion(this.level.quaternion) // apply level rotation
                     sun.position.set(position.x, position.y, position.z)
                     this.scene.add(sun)
 
-                    const godRaysEffect = new GodRaysEffect(this.camera, sun, {
-                        // resolutionScale: 0.75,
-                        resolutionScale: 0.28,
+                    // The god-rays light pass renders its source into a separate target, where r104
+                    // wrote gamma-encoded color. A twin of the visible sun with a gamma-encoding
+                    // material feeds that pass; the visible sun keeps its regular material.
+                    const lightSourceMaterial = sunMaterial.clone()
+                    encodeMaterialOutputAsLegacyGamma(lightSourceMaterial)
+                    // Point sprites are sized in canvas pixels whatever the target. The original
+                    // rendered the light pass at the god-rays resolution scale, so the sun covered
+                    // 1/scale more of that target than of the screen; postprocessing 6.39.4 renders
+                    // it at full resolution, so the twin is enlarged by the same factor.
+                    lightSourceMaterial.size = sunMaterial.size / GODRAYS_RESOLUTION_SCALE
+                    const lightSource = new THREE.Points(sunGeometry, lightSourceMaterial)
+                    lightSource.frustumCulled = false
+                    lightSource.position.copy(sun.position)
+                    // GodRaysEffect disables matrixAutoUpdate while rendering the light source, and
+                    // this twin never joins the main scene, so its static matrix is built here.
+                    lightSource.updateMatrix()
+                    this.godRaysLightSourceMaterial = lightSourceMaterial
+
+                    const godRaysEffect = new GodRaysEffect(this.camera, lightSource, {
+                        resolutionScale: GODRAYS_RESOLUTION_SCALE,
                         kernelSize: KernelSize.SMALL,
                         density: 0.96,
                         decay: 0.93,
@@ -524,7 +667,10 @@
                         clampMax: 1.0
                     })
 
-                    godRaysEffect.dithering = true
+                    // Off: the god-rays output is added to gamma-encoded values that the composer's
+                    // HalfFloat buffers store without 8-bit quantization, so there is no banding for
+                    // dithering to hide, and its noise would show as chroma speckle on the rays.
+                    godRaysEffect.dithering = false
 
                     const params = [
                         {
@@ -533,7 +679,10 @@
                             min: 0.00,
                             max: 1.00,
                             step: 0.01,
-                            cb: (v) => { godRaysEffect.setResolutionScale(v) }
+                            cb: (v) => {
+                                godRaysEffect.setResolutionScale(v)
+                                lightSourceMaterial.size = sunMaterial.size / v
+                            }
                         }
                     ]
 
@@ -577,7 +726,7 @@
 
                 const createHueSaturationEffect = () => {
 
-                    const hueSaturationEffect = new HueSaturationEffect(BlendFunction.NORMAL)
+                    const hueSaturationEffect = new HueSaturationEffect({ blendFunction: BlendFunction.NORMAL })
 
                     const params = [
                         {
@@ -608,59 +757,109 @@
 
                 }
 
-                const createSMAAEffect = async () => {
+                const createSMAAEffect = () => {
 
-                    const searchImage = await this.loaderManager.loadImage(SMAAEffect.searchImageDataURL)
-                    const areaImage = await this.loaderManager.loadImage(SMAAEffect.areaImageDataURL)
+                    const effect = new SMAAEffect({
+                        preset: SMAAPreset.MEDIUM,
+                        edgeDetectionMode: EdgeDetectionMode.COLOR
+                    })
 
-                    const effect =  new SMAAEffect(searchImage, areaImage)
-                    effect.setEdgeDetectionThreshold(0.065)
+                    effect.edgeDetectionMaterial.edgeDetectionThreshold = 0.065
 
                     return effect
 
                 }
 
-                const smaaEffect = await createSMAAEffect()
-                const bloomEffect = createBloomEffect()
-                const hueSaturationEffect = createHueSaturationEffect()
-                const brightnessContrastEffect = createBrightnessContrastEffect()
-                const godRayEffect = await createGodRayEffect()
+                // Parse the ?fx query parameter into the parity composer selection.
+                //   absent or no value -> composer active; the four beauty effects (godrays, bloom,
+                //                        huesat, bc); SMAA present but disabled.
+                //   =<csv>            -> composer active; only the named effects. Tokens: none,
+                //                        godrays, bloom, huesat, bc, smaa. Unknown tokens are ignored.
+                // Beauty effects by ?fx token, in beauty EffectPass order.
+                const BEAUTY_EFFECTS = [
+                    { token: "huesat", key: "hueSaturationEffect", create: createHueSaturationEffect },
+                    { token: "bc", key: "brightnessContrastEffect", create: createBrightnessContrastEffect },
+                    { token: "godrays", key: "godRayEffect", create: createGodRayEffect },
+                    { token: "bloom", key: "bloomEffect", create: createBloomEffect },
+                ]
+                const KNOWN_FX_TOKENS = ["none", "smaa", ...BEAUTY_EFFECTS.map(e => e.token)]
+
+                const fxParams = new URLSearchParams(window.location.search)
+                const selectedEffects = new Set()
+                let isDefaultSelection = false
+
+                this.parityBypassComposer = false
+
+                const rawFx = fxParams.get("fx")
+                if (!rawFx) {
+                    isDefaultSelection = true
+                    BEAUTY_EFFECTS.forEach(e => selectedEffects.add(e.token))
+                } else {
+                    for (const token of rawFx.split(",").map(s => s.trim()).filter(Boolean)) {
+                        if (!KNOWN_FX_TOKENS.includes(token)) {
+                            console.warn(`${TAG} initPostProcessing: unknown ?fx token "${token}" ignored`)
+                            continue
+                        }
+                        if (token !== "none") {
+                            selectedEffects.add(token)
+                        }
+                    }
+                }
+
+                const wantSmaa = selectedEffects.has("smaa")
+                // aaPass exists when SMAA is requested (enabled), or in the default selection, where
+                // it is present but disabled so the L key / command-panel toggle can enable it.
+                const buildAaPass = wantSmaa || isDefaultSelection
 
                 const renderPass = new RenderPass(this.scene, this.camera)
-                renderPass.renderToScreen = false
                 renderPass.clear = true
 
-                const aaPass = new EffectPass(
-                    this.camera,
-                    smaaEffect,
-                )
-                aaPass.renderToScreen = false
-                aaPass.enabled = false
+                let aaPass = null
+                if (buildAaPass) {
+                    const smaaEffect = createSMAAEffect()
+                    aaPass = new EffectPass(this.camera, smaaEffect)
+                    aaPass.enabled = wantSmaa
+                }
 
-                const beautyPass = new EffectPass(
-                    this.camera,
-                    hueSaturationEffect,
-                    brightnessContrastEffect,
-                    godRayEffect,
-                    bloomEffect
-                )
-                beautyPass.renderToScreen = true
+                const beautyEffects = []
+                for (const { token, key, create } of BEAUTY_EFFECTS) {
+                    if (!selectedEffects.has(token)) continue
+                    const effect = await create()
+                    beautyEffects.push(effect)
+                    this.postProcessingEffects[key] = effect
+                }
 
-                this.composer.addPass(renderPass)
-                this.composer.addPass(aaPass)
-                this.composer.addPass(beautyPass)
+                let beautyPass = null
+                if (beautyEffects.length > 0) {
+                    beautyPass = new EffectPass(this.camera, ...beautyEffects)
+                }
 
-                this.postProcessingEffects["bloomEffect"] = bloomEffect
-                this.postProcessingEffects["hueSaturationEffect"] = hueSaturationEffect
-                this.postProcessingEffects["brightnessContrastEffect"] = brightnessContrastEffect
-                this.postProcessingEffects["godRayEffect"] = godRayEffect
+                // RenderPass -> gamma encode -> (SMAA) -> (beauty). Every effect runs on the
+                // gamma-encoded values (see LegacyGammaEncodeEffect), so no effect converts color
+                // spaces and no pass encodes again on its way to the screen. For ?fx=none the chain
+                // is RenderPass alone, rendering to screen like the direct-render bypass path.
+                const effectPasses = [aaPass, beautyPass].filter(Boolean)
+                const parityPasses = [renderPass]
+                if (effectPasses.length > 0) {
+                    parityPasses.push(new EffectPass(this.camera, new LegacyGammaEncodeEffect()), ...effectPasses)
+                }
 
-                this.postProcessingPasses["aaPass"] = aaPass
-                this.postProcessingPasses["beautyPass"] = beautyPass
+                parityPasses.forEach((pass, index) => {
+                    if (pass instanceof EffectPass) {
+                        pass.effects.forEach(effect => { effect.inputColorSpace = null })
+                        pass.fullscreenMaterial.encodeOutput = false
+                    }
+                    pass.renderToScreen = (index === parityPasses.length - 1)
+                    this.composer.addPass(pass)
+                })
+
+                if (aaPass) this.postProcessingPasses["aaPass"] = aaPass
+                if (beautyPass) this.postProcessingPasses["beautyPass"] = beautyPass
 
                 const onKeyup = (e) => {
                     // L
                     if (e.keyCode === 76) {
+                        if (!aaPass) return
                         this.commandPanelSwitches.antialias.checked = !this.commandPanelSwitches.antialias.checked
                         aaPass.enabled = !aaPass.enabled
                     }
@@ -734,17 +933,17 @@
 
                 this.sounds = {}
 
-                const corridorSound = new T.Audio(this.audioListener)
+                const corridorSound = new THREE.Audio(this.audioListener)
                 corridorSound.setBuffer(corridorBuffer)
                 corridorSound.gain.disconnect()
                 corridorSound.gain.connect(this.audioGlobalGain)
 
-                const bridgeSound = new T.Audio(this.audioListener)
+                const bridgeSound = new THREE.Audio(this.audioListener)
                 bridgeSound.setBuffer(bridgeBuffer)
                 bridgeSound.gain.disconnect()
                 bridgeSound.gain.connect(this.audioGlobalGain)
 
-                const stairwaySound = new T.Audio(this.audioListener)
+                const stairwaySound = new THREE.Audio(this.audioListener)
                 stairwaySound.setBuffer(stairwayBuffer)
                 stairwaySound.gain.disconnect()
                 stairwaySound.gain.connect(this.audioGlobalGain)
@@ -768,13 +967,13 @@
 
                 // // load skyboxes on gpu
                 // for (const skybox of this.skyboxes) {
-                //     skybox.encoding = T.sRGBEncoding
+                //     skybox.colorSpace = THREE.SRGBColorSpace
                 //     this.scene.background = skybox
                 // }
 
                 this.skyboxIndex = 0
 
-                this.skyboxes[this.skyboxIndex].encoding = T.sRGBEncoding
+                this.skyboxes[this.skyboxIndex].colorSpace = THREE.SRGBColorSpace
                 this.scene.background = this.skyboxes[this.skyboxIndex]
                 this.scene.visible = true
 
@@ -785,19 +984,19 @@
              */
             initLights () {
 
-                const ambientColor = 0xFFBF4D
+                const ambientColor = new THREE.Color().setHex(LEGACY_WARM_LIGHT_HEX, THREE.LinearSRGBColorSpace)
 
                 const addAmbientLight = () => {
 
-                    const ambientLight = new T.AmbientLight(ambientColor, 0.4)
+                    const ambientLight = new THREE.AmbientLight(ambientColor, AMBIENT_INTENSITY * LEGACY_LIGHT_INTENSITY_SCALE)
                     this.scene.add(ambientLight)
 
                 }
 
                 const addDirectionalLight = () => {
 
-                    const directionalLight = new T.DirectionalLight(ambientColor, 0.12)
-                    const position = new T.Vector3(0, 14, 68)
+                    const directionalLight = new THREE.DirectionalLight(ambientColor, 0.12 * LEGACY_LIGHT_INTENSITY_SCALE)
+                    const position = new THREE.Vector3(0, 14, 68)
                     position.applyQuaternion(this.level.quaternion) // apply level rotation to light
                     directionalLight.position.set(position.x, position.y, position.z)
 
@@ -815,13 +1014,13 @@
                     directionalLight.shadow.camera.bottom = -d
 
                     this.scene.add(directionalLight)
-                    // this.scene.add(new T.CameraHelper(directionalLight.shadow.camera))
-                    // this.scene.add(new T.DirectionalLightHelper(directionalLight, 5))
+                    // this.scene.add(new THREE.CameraHelper(directionalLight.shadow.camera))
+                    // this.scene.add(new THREE.DirectionalLightHelper(directionalLight, 5))
 
                     // for testing shadow
-                    const plane = new T.Mesh(
-                        new T.PlaneGeometry(50, 50),
-                        new T.MeshStandardMaterial({
+                    const plane = new THREE.Mesh(
+                        new THREE.PlaneGeometry(50, 50),
+                        new THREE.MeshStandardMaterial({
                             color: 0x888888
                         })
                     )
@@ -830,9 +1029,9 @@
                     plane.receiveShadow = true
                     plane.position.set(0, 0.1, 15)
 
-                    const cube = new T.Mesh(
-                        new T.BoxGeometry(1.5, 1.5, 1.5),
-                        new T.MeshStandardMaterial({
+                    const cube = new THREE.Mesh(
+                        new THREE.BoxGeometry(1.5, 1.5, 1.5),
+                        new THREE.MeshStandardMaterial({
                             color: 0xff0000,
                             metalness: 0.9,
                             roughness: 0.2
@@ -875,19 +1074,19 @@
                         .position
                         .applyQuaternion(this.level.quaternion) // apply level rotation to pivot point
 
-                    const pointLight1 = new T.PointLight(ambientColor, 1.0)
+                    const pointLight1 = new THREE.PointLight(ambientColor, 1.0)
                     pointLight1.rotation.setFromQuaternion(this.level.quaternion) // apply level rotation to light
 
                     pointLight1.position.set(pivot.x, pivot.y, pivot.z)
                     pointLight1.translateZ(32)
 
-                    pointLight1.intensity = 0.5
-                    pointLight1.distance = 100
-                    pointLight1.decay = 2
+                    pointLight1.intensity = POINT_LIGHT1_INTENSITY
+                    pointLight1.distance = POINT_LIGHT1_DISTANCE
+                    pointLight1.decay = POINT_LIGHT1_DECAY
 
                     this.scene.add(pointLight1)
 
-                    // let pointLight1Helper = new T.PointLightHelper(pointLight1, pointLight1.distance)
+                    // let pointLight1Helper = new THREE.PointLightHelper(pointLight1, pointLight1.distance)
                     // this.scene.add(pointLight1Helper)
 
                     const tuning = () => {
@@ -922,7 +1121,7 @@
                                 cb: (v) => {
                                     pointLight1.distance = v
                                     this.scene.remove(pointLight1Helper)
-                                    pointLight1Helper = new T.PointLightHelper(pointLight1, pointLight1.distance)
+                                    pointLight1Helper = new THREE.PointLightHelper(pointLight1, pointLight1.distance)
                                     this.scene.add(pointLight1Helper)
                                 }
                             },
@@ -1009,6 +1208,14 @@
                     // MESH
                     if (o.type && o.type === "Mesh") {
 
+                        // Keep depthWrite on for transparent meshes (three.js #17706 turns it off for
+                        // BLEND materials) so glass occludes what lies behind it, sun included.
+                        // The translucent glass panes stay depth-free so the god-rays light pass
+                        // sees the sun through them.
+                        if (o.material && o.material.transparent && o.material.name !== GODRAYS_TRANSPARENT_MATERIAL) {
+                            o.material.depthWrite = true
+                        }
+
                         if (o.name.startsWith("FLOORS_SHADOW")) {
 
                             o.castShadow = false
@@ -1044,10 +1251,10 @@
                         }
                         else if (o.name === "Cylinder_Stargate") {
 
-                            o.material = new T.MeshNormalMaterial({
+                            o.material = new THREE.MeshNormalMaterial({
                                 transparent: true,
                                 opacity: 0,
-                                side: T.DoubleSide,
+                                side: THREE.DoubleSide,
                                 depthWrite: false
                             })
 
@@ -1160,7 +1367,7 @@
                 this.domElement.appendChild(cameraTargetDiv)
 
                 let startPoint = this.scene.getObjectByName("StartPoint") ?
-                    this.scene.getObjectByName("StartPoint").position : new T.Vector3(0, 0, 0)
+                    this.scene.getObjectByName("StartPoint").position : new THREE.Vector3(0, 0, 0)
 
                 startPoint = startPoint.applyQuaternion(this.level.quaternion)
 
@@ -1171,8 +1378,8 @@
                 let delta
                 let velocity = new THREE.Vector3()
                 let direction = new THREE.Vector3()
-                const X_axis = new T.Vector3(1, 0, 0)
-                const Z_axis = new T.Vector3(0, 0, 1)
+                const X_axis = new THREE.Vector3(1, 0, 0)
+                const Z_axis = new THREE.Vector3(0, 0, 1)
                 let delta_1
                 let delta_2
                 let isMovingX = false
@@ -1188,6 +1395,40 @@
                 yawObject.position.set(startPoint.x, this.cameraOffsetY, startPoint.z)
                 yawObject.rotation.y = -this.level.rotation.y
                 this.scene.add(yawObject)
+
+                // this.parityBypassComposer is set in initPostProcessing (which runs before this method).
+
+                // Parity-debug hook: teleport the camera, read its pose, locate the
+                // sun and toggle the postprocessing composer for A/B parity captures.
+                if (import.meta.env.DEV) {
+                    window.__ludikParity = {
+                        setPose: (x, y, z, pitch, yaw) => {
+                            this.controls.setPosition(x, y, z)
+                            this.controls.setRotation(pitch, yaw)
+                        },
+                        getPose: () => {
+                            const p = this.controls.getPosition()
+                            const r = this.controls.getRotation()
+                            return { x: p.x, y: p.y, z: p.z, pitch: r.x, yaw: r.y }
+                        },
+                        getSun: () => {
+                            const s = new THREE.Vector3(0, 0, 1000).applyQuaternion(this.level.quaternion)
+                            return { x: s.x, y: s.y, z: s.z }
+                        },
+                        setEffects: (enabled) => {
+                            this.parityBypassComposer = !enabled
+                        },
+                        setAxes: (visible) => {
+                            if (this.axesHelper) this.axesHelper.visible = visible
+                        },
+                        getPostProcessing: () => ({
+                            renderer: this.renderer,
+                            composer: this.composer,
+                            effects: this.postProcessingEffects,
+                            passes: this.postProcessingPasses,
+                        }),
+                    }
+                }
 
                 this.controls.forward =  false
                 this.controls.backward =  false
@@ -1326,19 +1567,6 @@
                 const CC_VERT_X = commandConsolePolyTransform.map(p => p.x)
                 const CC_VERT_Y = commandConsolePolyTransform.map(p => p.z)
 
-                // Only for testing
-                const showNavPolygon = () => {
-                    const lineGeometry = new T.Geometry();
-                    levelPolyTransform.forEach(p => lineGeometry.vertices.push(p))
-                    const polyLine = new T.Line(lineGeometry, new T.LineBasicMaterial({color: 0xff0000}))
-                    this.scene.add(polyLine)
-
-                    const lineGeometry2 = new T.Geometry();
-                    commandConsolePolyTransform.forEach(p => lineGeometry2.vertices.push(p))
-                    const polyLine2 = new T.Line(lineGeometry2, new T.LineBasicMaterial({color: 0x0000ff}))
-                    this.scene.add(polyLine2)
-                }
-
                 const footstepSound = async () => {
 
                     const floorBuffers = [
@@ -1358,7 +1586,7 @@
                     const walkTime = 500
                     const runTime = 288
                     const idleTime = 100
-                    const sound = new T.Audio(this.audioListener)
+                    const sound = new THREE.Audio(this.audioListener)
                     sound.setLoop(false)
                     sound.setVolume(0.075)
 
@@ -1497,19 +1725,19 @@
 
                 const createHoledCircle = (color = 0x1EA4F9) => {
 
-                    const circleShape = new T.Shape()
+                    const circleShape = new THREE.Shape()
                     circleShape.moveTo(0, 0)
                     circleShape.absarc(0, 0, 0.5, 0, 2 * Math.PI, false)
 
-                    const holePath = new T.Path()
+                    const holePath = new THREE.Path()
                     holePath.moveTo(0, 0)
                     holePath.absarc(0, 0, 0.4, 0, Math.PI * 2, true)
 
                     circleShape.holes.push(holePath)
 
-                    const mesh = new T.Mesh(
-                        new T.ShapeGeometry(circleShape),
-                        new T.MeshBasicMaterial({
+                    const mesh = new THREE.Mesh(
+                        new THREE.ShapeGeometry(circleShape),
+                        new THREE.MeshBasicMaterial({
                             color: color,
                             transparent: true,
                             opacity: 0.4
@@ -1548,7 +1776,7 @@
                 this.camera.position.set(startPoint.x, this.cameraOffsetY, startPoint.z)
                 this.camera.rotation.set(0, startRotY, 0)
 
-                const player = new T.Mesh(new T.SphereGeometry(0.3, 0.3, 0.3), new T.MeshBasicMaterial({color: "red"}))
+                const player = new THREE.Mesh(new THREE.SphereGeometry(0.3, 0.3, 0.3), new THREE.MeshBasicMaterial({color: "red"}))
                 player.position.set(startPoint.x, 0, startPoint.z)
                 player.visible = false
                 this.scene.add(player)
@@ -1560,11 +1788,11 @@
                 let groupID
                 let path
 
-                const targetPosition = new T.Vector3();
+                const targetPosition = new THREE.Vector3();
 
                 const pathfinder = new Pathfinding();
-                const touchPoint = new T.Vector2();
-                const raycaster = new T.Raycaster();
+                const touchPoint = new THREE.Vector2();
+                const raycaster = new THREE.Raycaster();
 
                 // const helper = new PathfindingHelper();
                 // this.scene.add(helper);
@@ -1581,9 +1809,9 @@
                 geometry.rotateZ(this.level.rotation.z)
 
                 // create navmesh with geometry scaled and rotated
-                const navmesh = new T.Mesh(
+                const navmesh = new THREE.Mesh(
                     geometry,
-                    new T.MeshBasicMaterial({
+                    new THREE.MeshBasicMaterial({
                         color: 0x115511,
                         transparent: true,
                         opacity: 0.5,
@@ -1713,7 +1941,7 @@
                     } else {
 
                         const closestPlayerNode = pathfinder.getClosestNode(player.position, ZONE, groupID);
-                        const clamped = new T.Vector3();
+                        const clamped = new THREE.Vector3();
 
                         // TODO(donmccurdy): Don't clone targetPosition, fix the bug.
                         pathfinder.clampStep(
@@ -1752,7 +1980,7 @@
 
                     const walkTime = 500
                     const idleTime = 100
-                    const sound = new T.Audio(this.audioListener)
+                    const sound = new THREE.Audio(this.audioListener)
                     sound.setLoop(false)
                     sound.setVolume(0.075)
 
@@ -1810,7 +2038,7 @@
              */
             async initUserInteractions () {
 
-                const worldConsoleMessage = $("#worldConsoleMessage") // to hide in case of transition
+                const worldConsoleMessage = document.getElementById("worldConsoleMessage") // to hide in case of transition
                 const playerPosition = this.controls.getObject().position
 
                 const stargateInteraction = async () => {
@@ -1821,20 +2049,29 @@
                         value: document.getElementById("pbarValue")
                     }
 
+                    const resetProgressBar = () => {
+                        pbar.container.style.display = "none"
+                        pbar.inner.style.width = `0%`
+                        pbar.value.textContent = `0%`
+                    }
+
                     const cylinderStargate = this.scene.getObjectByName("Cylinder_Stargate")
                     let cylinderStargateRotationStep = 0
 
                     const brightnessContrastEffect = this.postProcessingEffects["brightnessContrastEffect"]
-                    const brightnessDefault = 0.036
+                    // Brightness the scene returns to: the current Command Panel value
+                    const currentBrightness = () => this.commandPanelSliders.brightness.value
 
                     let isLoading = false
+                    // False after a teleport or a WebGL stop until the player leaves the stargate zone
+                    let isArmed = true
 
-                    const stargateSound = new T.Audio(this.audioListener)
+                    const stargateSound = new THREE.Audio(this.audioListener)
                     stargateSound.buffer = await this.loaderManager.loadAudio("assets/audio/Stargate_128cbr.mp3")
                     stargateSound.gain.disconnect()
                     stargateSound.gain.connect(this.audioGlobalGain)
 
-                    const stargateCylinderSound = new T.PositionalAudio(this.audioListener)
+                    const stargateCylinderSound = new THREE.PositionalAudio(this.audioListener)
                     stargateCylinderSound.setVolume(0)
                     stargateCylinderSound.panner.panningModel = "HRTF"
                     stargateCylinderSound.panner.distanceModel = "inverse"
@@ -1855,6 +2092,10 @@
                     let timeoutId
 
                     const brightnessTween = (value, time, onComplete) => {
+
+                        if (!brightnessContrastEffect) {
+                            return { start: () => {} }
+                        }
 
                         const from = {v: brightnessContrastEffect.uniforms.get("brightness").value}
                         const to = {v: value}
@@ -1936,7 +2177,7 @@
                     const startLoading = async () => {
 
                         this.isTransitionRunning = true
-                        worldConsoleMessage.hide()
+                        worldConsoleMessage.style.display = "none"
                         isLoading = true
                         this.isConsoleOpen = true
                         this.tweenGroupFXAudioFadeOut.removeAll()
@@ -1954,11 +2195,8 @@
                             // Check if WebGL has been disabled during animation
                             if (this.webGLRunning) {
                                 this.controls.disable()
-                                this.$store.commit(mutations.worldState, states.world.stop)
-                                pbar.container.style.display = "none"
-                                pbar.inner.style.width = `0%`
-                                pbar.value.textContent = `0%`
-                                brightnessContrastEffect.uniforms.get("brightness").value = brightnessDefault
+                                this.store.changeWorldState(states.world.stop)
+                                resetProgressBar()
                                 this.isConsoleOpen = false
                                 this.isTransitionRunning = false
                             }
@@ -1978,12 +2216,10 @@
                         this.tweenGroupStargate.removeAll()
                         this.audioFadeOut(stargateSound, fadeTime / 1000, 0, this.tweenGroupFXAudioFadeOut)
                         this.audioFadeOut(stargateCylinderSound, fadeTime / 1000 * 3, 0, this.tweenGroupFXAudioFadeOut)
-                        brightnessTween(brightnessDefault, fadeTime).start()
+                        brightnessTween(currentBrightness(), fadeTime).start()
                         stargateCylinderOpacityTween(0, loadTime / 4).start()
                         stargateCylinderRotationTween(-0.1, loadTime / 4).start()
-                        pbar.container.style.display = "none"
-                        pbar.inner.style.width = `0%`
-                        pbar.value.textContent = `0%`
+                        resetProgressBar()
 
                     }
 
@@ -1994,12 +2230,13 @@
                         }
 
                         if (this.playerZone === this.zones.stargate) {
-                            if (!isLoading) {
+                            if (!isLoading && isArmed) {
                                 startLoading()
                             }
 
                         }
                         else {
+                            isArmed = true
                             if (isLoading) {
                                 await stopLoading()
                             }
@@ -2007,13 +2244,30 @@
 
                     })
 
-                    const onWebGLStop = () => {
+                    // Put the stargate back in its idle state: the stargate tweens are cleared
+                    // on WebGL stop, so nothing else would bring these values back.
+                    const resetStargate = () => {
                         timeoutId && clearTimeout(timeoutId)
+                        isLoading = false
+                        this.isTransitionRunning = false
+                        this.isConsoleOpen = false
                         stargateSound.isPlaying && stargateSound.stop()
-                        // stargateCylinderSound.isPlaying && stargateCylinderSound.stop()
-                        pbar.container.style.display = "none"
-                        pbar.inner.style.width = `0%`
-                        pbar.value.textContent = `0%`
+                        stargateSound.setVolume(0)
+                        stargateCylinderSound.isPlaying && stargateCylinderSound.stop()
+                        stargateCylinderSound.setVolume(0)
+                        brightnessContrastEffect && (brightnessContrastEffect.uniforms.get("brightness").value = currentBrightness())
+                        cylinderStargate.material.opacity = 0
+                        cylinderStargate.visible = false
+                        cylinderStargateRotationStep = 0
+                        resetProgressBar()
+                    }
+
+                    const onWebGLStop = () => {
+                        // A player still standing in the ring must step out before it activates again
+                        if (isLoading || this.playerZone === this.zones.stargate) {
+                            isArmed = false
+                        }
+                        resetStargate()
                     }
 
                     // On WebGL stop, cancel transitions
@@ -2025,7 +2279,7 @@
 
                     const tweenTimeMs = 1700 // transition duration
 
-                    const sound = new T.Audio(this.audioListener)
+                    const sound = new THREE.Audio(this.audioListener)
                     sound.setBuffer(await this.loaderManager.loadAudio("assets/audio/CommandPanel_128cbr.mp3"))
                     sound.setVolume(1.0)
                     sound.setLoop(false)
@@ -2039,14 +2293,14 @@
                     this.scene.add(commandDeskBoxGUI)
 
                     const commandConsoleModule = this.scene.getObjectByName("Command_Desk_Module_Edges")
-                    const raycaster = new T.Raycaster()
-                    let targetDirection = new T.Vector3()
-                    const touchPoint = new T.Vector2(); // for touch
+                    const raycaster = new THREE.Raycaster()
+                    let targetDirection = new THREE.Vector3()
+                    const touchPoint = new THREE.Vector2(); // for touch
 
                     // EdgeGeometry to display on interaction
-                    let commandConsoleModuleEdges = new T.LineSegments(
-                        new T.EdgesGeometry(commandConsoleModule.geometry),
-                        new T.LineBasicMaterial({
+                    let commandConsoleModuleEdges = new THREE.LineSegments(
+                        new THREE.EdgesGeometry(commandConsoleModule.geometry),
+                        new THREE.LineBasicMaterial({
                             color: 0xffffff,
                             transparent: true,
                             opacity: 0.8
@@ -2074,7 +2328,7 @@
                         }
 
                         this.isTransitionRunning = true
-                        worldConsoleMessage.hide()
+                        worldConsoleMessage.style.display = "none"
 
                         commandConsoleModuleEdges.visible = false
                         this.controls.enabled = false
@@ -2096,10 +2350,10 @@
 
                         const createTweenRotation = () => {
                             const qStart = this.controls.getObject().quaternion.clone().normalize()
-                            const euler = new T.Euler(0, 2 * Math.PI - this.level.rotation.y, 0)
+                            const euler = new THREE.Euler(0, 2 * Math.PI - this.level.rotation.y, 0)
                             euler.reorder("YXZ") // PointerLockControls and DeviceOrientationControls uses different axes order
-                            const qEnd = new T.Quaternion().setFromEuler(euler).normalize()
-                            const qTarget = new T.Quaternion()
+                            const qEnd = new THREE.Quaternion().setFromEuler(euler).normalize()
+                            const qTarget = new THREE.Quaternion()
 
                             const from = {t: 0}
                             const to = {t: 1}
@@ -2108,7 +2362,7 @@
                                 .to(to, tweenTimeMs)
                                 .easing(TWEEN.Easing.Quadratic.InOut)
                                 .onUpdate(() => {
-                                    T.Quaternion.slerp(qStart, qEnd, qTarget, from.t)
+                                    qTarget.slerpQuaternions(qStart, qEnd, from.t)
                                     this.controls.getObject().quaternion.set(qTarget.x, qTarget.y, qTarget.z, qTarget.w)
                                 })
                                 .onComplete(() => {
@@ -2172,22 +2426,20 @@
                     const area1 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door1"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door1")
                         )
 
                         const doorLeft = this.scene.getObjectByName("Door_Left_1")
                         const doorLeftClosedPos = doorLeft.position.clone()
-                        const doorLeftOpenPos = doorLeftClosedPos.clone().add(new T.Vector3(-4, 0, 0))
+                        const doorLeftOpenPos = doorLeftClosedPos.clone().add(new THREE.Vector3(-4, 0, 0))
                         const doorRight = this.scene.getObjectByName("Door_Right_1")
                         const doorRightClosedPos = doorRight.position.clone()
-                        const doorRightOpenPos = doorRightClosedPos.clone().add(new T.Vector3(4, 0, 0))
+                        const doorRightOpenPos = doorRightClosedPos.clone().add(new THREE.Vector3(4, 0, 0))
 
                         // configure sounds
                         const buffer = await this.loaderManager.loadAudio("assets/audio/Pneumatic-door_128cbr.mp3")
-                        const doorLeftSound = new T.PositionalAudio(this.audioListener)
-                        const doorRightSound = new T.PositionalAudio(this.audioListener)
+                        const doorLeftSound = new THREE.PositionalAudio(this.audioListener)
+                        const doorRightSound = new THREE.PositionalAudio(this.audioListener)
                         doorLeft.add(doorLeftSound)
                         doorRight.add(doorRightSound)
 
@@ -2385,18 +2637,16 @@
                     const area2 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door2"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door2")
                         )
 
                         const door = this.scene.getObjectByName("Door_Vert_2")
                         const doorClosedPos = door.position.clone()
-                        const doorOpenPos = doorClosedPos.clone().add(new T.Vector3(0, 3, 0))
+                        const doorOpenPos = doorClosedPos.clone().add(new THREE.Vector3(0, 3, 0))
 
                         // configure sounds
                         const buffer = await this.loaderManager.loadAudio("assets/audio/Pneumatic-door_128cbr.mp3")
-                        const doorSound = new T.PositionalAudio(this.audioListener)
+                        const doorSound = new THREE.PositionalAudio(this.audioListener)
                         door.add(doorSound)
 
                         doorSound.setVolume(doorAudioVolume)
@@ -2413,7 +2663,7 @@
 
                         doorSound.setBuffer(buffer)
 
-                        // this.scene.add(new T.Box3Helper(boxArea, 0xffff00));
+                        // this.scene.add(new THREE.Box3Helper(boxArea, 0xffff00));
 
                         this.fnlp.push(() => {
 
@@ -2508,18 +2758,16 @@
                     const area3 = async () => {
 
                         const polyArea = polygonFromRect(
-                            this.scene.getObjectByName("PolyArea_Door3"),
-                            this.level.quaternion,
-                            this.scene
+                            this.scene.getObjectByName("PolyArea_Door3")
                         )
 
                         const door = this.scene.getObjectByName("Door_Vert_3")
                         const doorClosedPos = door.position.clone()
-                        const doorOpenPos = doorClosedPos.clone().add(new T.Vector3(0, 3, 0))
+                        const doorOpenPos = doorClosedPos.clone().add(new THREE.Vector3(0, 3, 0))
 
                         // configure sounds
                         const buffer = await this.loaderManager.loadAudio("assets/audio/Pneumatic-door_128cbr.mp3")
-                        const doorAudio = new T.PositionalAudio(this.audioListener)
+                        const doorAudio = new THREE.PositionalAudio(this.audioListener)
                         door.add(doorAudio)
 
                         doorAudio.setVolume(doorAudioVolume)
@@ -2647,13 +2895,13 @@
                 const system = new System()
                 const emitter1 = new Emitter()
                 const emitter2 = new Emitter()
-                const renderer = new SpriteRenderer(this.scene)
+                const renderer = new SpriteRenderer(this.scene, THREE)
 
-                const sprite = new T.Sprite(
-                    new T.SpriteMaterial({
+                const sprite = new THREE.Sprite(
+                    new THREE.SpriteMaterial({
                         map: await this.loaderManager.loadTexture("assets/images/particle.png"),
                         color: 0xffffff,
-                        blending: T.AdditiveBlending,
+                        blending: THREE.AdditiveBlending,
                         // fog: true
                     })
                 )
@@ -2691,8 +2939,8 @@
                     .emit();
 
                 const z = 75
-                let pos1 = new T.Vector3()
-                let pos2 = new T.Vector3()
+                let pos1 = new THREE.Vector3()
+                let pos2 = new THREE.Vector3()
 
                 emitter1.rotation.set(0, Math.PI - this.level.rotation.y, 0)
                 emitter2.rotation.set(0, Math.PI - this.level.rotation.y, 0)
@@ -2745,11 +2993,11 @@
                 const stairway1 = this.scene.getObjectByName("PolyArea_Stairway1")
                 const stairway2 = this.scene.getObjectByName("PolyArea_Stairway2")
 
-                const corridorPoly = polygonFromRect(corridor, this.level.quaternion, this.scene)
-                const bridgePoly = polygonFromRect(bridge, this.level.quaternion, this.scene)
-                const stargatePoly = polygonFromRect(stargate, this.level.quaternion, this.scene)
-                const stairwayPoly1 = polygonFromRect(stairway1, this.level.quaternion, this.scene)
-                const stairwayPoly2 = polygonFromRect(stairway2, this.level.quaternion, this.scene)
+                const corridorPoly = polygonFromRect(corridor)
+                const bridgePoly = polygonFromRect(bridge)
+                const stargatePoly = polygonFromRect(stargate)
+                const stairwayPoly1 = polygonFromRect(stairway1)
+                const stairwayPoly2 = polygonFromRect(stairway2)
 
                 const playerPosition = this.controls.getObject().position
 
@@ -2973,7 +3221,7 @@
                 const fanBuffer = await this.loaderManager.loadAudio("assets/audio/fan_128cbr.mp3")
 
                 const createPositionalAudio = (buffer) => {
-                    const pa = new T.PositionalAudio(this.audioListener)
+                    const pa = new THREE.PositionalAudio(this.audioListener)
                     pa.panner.panningModel = "HRTF"
                     pa.panner.distanceModel = "inverse"
                     pa.panner.refDistance = 1
@@ -3035,7 +3283,7 @@
 
                 const createFXAudio = async (url) => {
                     // threejs Audio objects don't have panner. Adding one to have stereo fx sounds
-                    const audio = new T.Audio(this.audioListener).setBuffer(await this.loaderManager.loadAudio(url))
+                    const audio = new THREE.Audio(this.audioListener).setBuffer(await this.loaderManager.loadAudio(url))
                     audio.panner = this.audioContext.createStereoPanner()
                     audio.gain.disconnect() // disconnect from output
                     audio.gain.connect(audio.panner)
@@ -3292,7 +3540,8 @@
              */
             initAxesHelper (size) {
 
-                this.scene.add(new T.AxesHelper(size || 100))
+                this.axesHelper = new THREE.AxesHelper(size || 100)
+                this.scene.add(this.axesHelper)
 
             },
 
@@ -3302,7 +3551,7 @@
              */
             initGridHelper (size) {
 
-                this.scene.add(new T.GridHelper(size || 100))
+                this.scene.add(new THREE.GridHelper(size || 100))
 
             },
 
@@ -3369,9 +3618,21 @@
 
                         this.deltaTime = this.clock.getDelta()
                         this.elapsedTime = this.clock.elapsedTime
-                        this.fnlp.forEach(f => f(this.elapsedTime, this.deltaTime))
+                        // Catch per-callback errors so one failing per-frame callback
+                        // cannot kill the render loop (requestAnimationFrame still re-arms).
+                        this.fnlp.forEach(f => {
+                            try {
+                                f(this.elapsedTime, this.deltaTime)
+                            } catch (err) {
+                                console.error("World fnlp callback error:", err)
+                            }
+                        })
                         this.renderer.info.reset()
-                        this.composer.render(this.deltaTime)
+                        if (this.parityBypassComposer) {
+                            this.renderer.render(this.scene, this.camera)
+                        } else {
+                            this.composer.render()
+                        }
                         requestAnimationFrame(animate)
 
                     }
@@ -3379,7 +3640,7 @@
                 }
 
                 this.webGLRunning = true
-                this.controls.enabled = true
+                this.controls && (this.controls.enabled = true)
                 animate()
                 console.log(TAG, "WebGL start")
 
@@ -3519,7 +3780,7 @@
 
                 await SCREENFULL.toggle(document.body)
 
-                if (requestLock && this.$store.state.worldState === states.world.start && !this.controls.isLocked) {
+                if (requestLock && this.store.worldState === states.world.start && !this.controls.isLocked) {
 
                     this.controls.lock({startWebGL: true})
 
@@ -3558,35 +3819,50 @@
                 this.webGLRunning = false
                 this.webGLStartRequested = false // async syncronization between start/stop
 
-                this.renderer = new T.WebGLRenderer({antialias: false, alpha: false})
+                applyLegacyOutputGamma()
+
+                // No depth:false here: the composer-bypass path renders directly to screen and
+                // needs the default depth buffer. antialias/stencil off per the postprocessing README.
+                this.renderer = new THREE.WebGLRenderer({
+                    antialias: false,
+                    alpha: false,
+                    stencil: false,
+                    powerPreference: "high-performance"
+                })
                 this.renderer.setClearColor(0x000000)
                 this.renderer.setSize(this.width, this.height)
                 this.renderer.setPixelRatio(window.devicePixelRatio * this.commandPanelSliders.resolution.default)
                 this.renderer.shadowMap.enabled = false
                 this.renderer.shadowMapSoft = true
-                this.renderer.shadowMap.type = T.PCFSoftShadowMap
-                this.renderer.gammaOutput = true
-                this.renderer.gammaFactor = 2.2
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+                this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
                 this.renderer.info.autoReset = false // to access renderer information when using EffectComposer
                 this.domElement.appendChild(this.renderer.domElement)
 
-                this.composer = new EffectComposer(this.renderer)
+                // HalfFloat ping-pong buffers. They hold the linear scene render until
+                // LegacyGammaEncodeEffect clamps and encodes it; every later pass carries gamma
+                // values (see the postprocessing working space comment by LEGACY_GAMMA_ENCODE_GLSL).
+                // HalfFloat rather than r104's 8-bit storage: values are clamped to [0, 1] after
+                // the encode, so the only difference is the dropped 8-bit rounding, whereas 8-bit
+                // buffers get tagged sRGB by postprocessing internally, which would re-decode the
+                // gamma values.
+                this.composer = new EffectComposer(this.renderer, { frameBufferType: THREE.HalfFloatType })
                 this.postProcessingEffects = { } // post processing effects
                 this.postProcessingPasses = { } // post processing passes
 
                 this.fnlp = [] // loop rendering functions
 
-                this.scene = new T.Scene()
+                this.scene = new THREE.Scene()
 
-                this.camera = new T.PerspectiveCamera(75, this.width / this.height, 0.1, 2000)
+                this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 2000)
                 this.cameraOffsetY = 2.6 * this.scale
 
                 this.level = undefined
                 this.navmesh = undefined
                 this.skyboxes = []
 
-                this.clock = new T.Clock()
+                this.clock = new THREE.Clock()
                 this.deltaTime = undefined
                 this.elapsedTime = undefined
 
@@ -3610,7 +3886,7 @@
 
                 this.playerZone = this.zones.init
 
-                this.audioListener = new T.AudioListener()
+                this.audioListener = new THREE.AudioListener()
                 this.audioContext = this.audioListener.context
                 this.audioGlobalGain = this.audioContext.createGain()
                 this.audioGlobalGain.connect(this.audioListener.getInput())
@@ -3645,8 +3921,10 @@
                     this.tweenGroupAudioGlobal.update()
                 })
 
-                WEBPACK_MODE === "development" && this.initAxesHelper(1000)
-                WEBPACK_MODE === "development" && this.initStatsRenderer()
+                import.meta.env.DEV && this.initAxesHelper(1000)
+                // TODO(#84): restore renderer stats panel (threex.stats) once brought over.
+                // import.meta.env.DEV && this.initStatsRenderer()
+
                 await this.loadAssets()
                 this.initSkyboxes()
                 await this.initLevel()
@@ -3657,7 +3935,9 @@
                 this.updatePlayerZone()
                 this.initUserInteractions()
                 this.initAmbientAudio()
+
                 this.initStatsFPS()
+
                 this.onWindowResize()
 
                 this.eventManager.addDomEvent(window, "resize", this.onWindowResize)
@@ -3683,20 +3963,24 @@
 
             worldState (newVal, oldVal) {
 
-                const world = $("#world")
+                const world = this.$el
 
                 switch (newVal) {
 
                     case states.world.start:
-                        world.css({opacity: 1, display: "block"})
-                        !this.isTouchDevice ? this.controls.lock({startWebGL: true}) : this.startWebGL()
+                        world.style.opacity = 1
+                        world.style.display = "block"
+                        world.style.pointerEvents = "auto"
+                        !this.isTouchDevice && this.controls ? this.controls.lock({startWebGL: true}) : this.startWebGL()
                         this.displayConsoleMessage() // Runs only once at start
-                        this.$store.commit(mutations.appState, states.app.idle)
+                        this.store.changeAppState(states.app.idle)
                         break
 
                     case states.world.stop:
-                        !this.isTouchDevice ? this.controls.unlock({stopWebGL: true}) : this.stopWebGL()
-                        world.css({opacity: 0, display: "none"})
+                        !this.isTouchDevice && this.controls ? this.controls.unlock({stopWebGL: true}) : this.stopWebGL()
+                        world.style.opacity = 0
+                        world.style.display = "none"
+                        world.style.pointerEvents = "none"
                         break
 
                 }
@@ -3706,14 +3990,21 @@
         async mounted () {
 
             await this.init()
-            this.$store.commit(mutations.worldState, states.world.init)
+
+            // The scene starts on user gesture: the worldState watcher's `start` branch
+            // acquires pointer lock (controls.lock -> requestPointerLock) which then calls
+            // startWebGL. Here we only move to the `init` state and wait for that gesture.
+            this.store.changeWorldState(states.world.init)
 
         },
 
-        beforeDestroy () {
+        beforeUnmount () {
 
             this.eventManager.removeBusEvents()
             this.eventManager.removeDomEvents()
+
+            if (this.composer) this.composer.dispose()
+            if (this.godRaysLightSourceMaterial) this.godRaysLightSourceMaterial.dispose()
 
         }
 
@@ -3722,12 +4013,10 @@
 
 <style scoped lang="scss">
 
-    @import "../../styles/base/reset";
-    @import "../../styles/base/base";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
+    @use "../../styles/base/reset";
+    @use "../../styles/base/base";
+    @use "../../styles/base/typography";
+    @use "sass:color";
 
     canvas {
         display: block;
@@ -3752,6 +4041,7 @@
         height: 100vh;
         background-color: #000;
         opacity: 0;
+        pointer-events: none;
     }
 
     #worldConsole {
@@ -3777,7 +4067,7 @@
         width: 100%;
         font-size: 0.8em;
         font-family: roboto-condensed;
-        color: lighten($scifi-cyan-hover, 35);
+        color: color.adjust($scifi-cyan-hover, $lightness: 35%);
     }
 
     #pbarContainer {
@@ -3957,7 +4247,7 @@
                     appearance: none;
                     width: 1.6em;
                     height: 1.6em;
-                    background: lighten($scifi-cyan-hover, 50);
+                    background: color.adjust($scifi-cyan-hover, $lightness: 50%);
                     cursor: pointer;
                     @include border-radius(0.8em);
                 }
@@ -3965,7 +4255,7 @@
                 .commandpanel-row-slider::-moz-range-thumb {
                     width: 1.6em;
                     height: 1.6em;
-                    background: lighten($scifi-cyan-hover, 50);
+                    background: color.adjust($scifi-cyan-hover, $lightness: 50%);
                     cursor: pointer;
                     @include border-radius(0.8em);
                 }
@@ -4031,7 +4321,7 @@
                         width: 24px;
                         left: 2px;
                         bottom: 2px;
-                        background-color: lighten($scifi-cyan-hover, 50);
+                        background-color: color.adjust($scifi-cyan-hover, $lightness: 50%);
                         @include border-radius(13px);
                         @include transition(.4s);
                     }

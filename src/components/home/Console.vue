@@ -1,227 +1,200 @@
 <template>
     <div id="homeConsole">
-        <span id="homeConsoleMessage" class="home-console-text"></span>
-        <img id="homeConsoleReload" src="../../../assets/images/icons/icons8-ruota-a-destra-filled-50.png" width="" alt="">
+        <span id="homeConsoleMessage" ref="messageRef" class="home-console-text"></span>
+        <img id="homeConsoleReload" ref="reloadRef" src="/assets/images/icons/icons8-ruota-a-destra-filled-50.png" alt="">
     </div>
 </template>
 
-<script>
+<script setup>
 
-    import { states, mutations } from "../../store/storeUtils"
+    import { ref, watch, onMounted, onBeforeUnmount } from "vue"
+    import { useAppStore } from "../../stores/app"
     import AudioManager from "../shared/AudioManager"
     import EventManager from "../shared/EventManager"
     import { wait } from "../shared/utils"
 
-    const TAG = "[Console]"
-    const T = THREE
+    const messageRef = ref(null)
+    const reloadRef = ref(null)
+
     const eventManager = new EventManager()
+    const audioManager = new AudioManager()
 
-    export default {
+    let reloadTyping = false
 
-        name: "Console",
+    async function displayConsoleMessage () {
 
-        data () {
+        // Fire-and-forget: the app boots into a visible Home without a user gesture, so the
+        // AudioContext stays suspended and `resume()` would never settle. Don't block the
+        // typing on it — the beeps stay silent until the first gesture (restored in #80).
+        AudioManager.resume().catch(() => {})
+        reloadTyping = false
 
-            return {
+        const homeConsoleMessage = messageRef.value
+        const soundVolume = 0.01
+        const charTimeout = 40
+        const phraseTimeoutShort = 200 // , : ;
+        const phraseTimeoutLong = 1000 // . ! ?
+        let message = ""
 
-                reloadTyping: false
+        const buffers = [
+            await audioManager.loadBuffer("/assets/audio/data_beap_1_128cbr.mp3"),
+            await audioManager.loadBuffer("/assets/audio/data_beap_2_128cbr.mp3"),
+            await audioManager.loadBuffer("/assets/audio/data_beap_3_128cbr.mp3"),
+            await audioManager.loadBuffer("/assets/audio/data_beap_4_128cbr.mp3")
+        ]
 
+        const phrases = [
+            `Hi, I am a developer/producer based in Rome.<br><br>`,
+            `This is an experimental website for my musical project LUDIK, I will add content as soon as available. Hope you will find something interesting!<br><br>`,
+            `For info, collaborations or just to say hi, feel free to `
+        ]
+
+        const appendGetInTouchLink = () => {
+
+            const elem = document.createElement("span")
+            elem.textContent = "get in touch! (ツ)_.\\m/"
+            elem.style.color = "#1EA4F9"
+            elem.style.opacity = "0"
+            elem.style.transition = "opacity 1s ease-in-out"
+
+            const onMouseEnter = () => {
+                elem.style.color = "white"
+                elem.style.cursor = "pointer"
             }
 
-        },
-
-        computed: {
-
-            homeState () {
-
-                return this.$store.state.homeState
-
+            const onMouseLeave = () => {
+                elem.style.color = "#1EA4F9"
+                elem.style.cursor = "auto"
             }
 
-        },
-
-        watch: {
-
-            homeState (newVal, oldVal) {
-
-                switch (newVal) {
-
-                    case states.home.start:
-                        // Trigger animation only the first time
-                        if (!this.isInitialized) {
-                            setTimeout(this.displayConsoleMessage, 250)
-                            eventManager.addDomEvent(document.getElementById("homeConsoleReload"), "click", this.reloadConsoleMessage)
-                        }
-                        break
-
-                    case states.home.stop:
-                        break
-
-                }
+            const onClick = () => {
+                const footer = document.getElementById("homeFooter")
+                footer && footer.scrollIntoView({ behavior: "smooth", block: "center" })
             }
 
-        },
+            eventManager.addDomEvent(elem, "mouseenter", onMouseEnter)
+            eventManager.addDomEvent(elem, "mouseleave", onMouseLeave)
+            eventManager.addDomEvent(elem, "click", onClick)
 
-        methods: {
-
-            async displayConsoleMessage () {
-
-                await AudioManager.resume()
-                this.reloadTyping = false
-
-                const homeConsoleMessage = $("#homeConsoleMessage")
-                const soundVolume = 0.01
-                const charTimeout = 40
-                const phraseTimeoutShort = 200 // , : ;
-                const phraseTimeoutLong = 1000 // . ! ?
-                let message = ""
-
-                const buffers = [
-                    await this.audioManager.loadBuffer("assets/audio/data_beap_1_128cbr.mp3"),
-                    await this.audioManager.loadBuffer("assets/audio/data_beap_2_128cbr.mp3"),
-                    await this.audioManager.loadBuffer("assets/audio/data_beap_3_128cbr.mp3"),
-                    await this.audioManager.loadBuffer("assets/audio/data_beap_4_128cbr.mp3")
-                ]
-
-                const phrases = [
-                    `Hi, I am a developer/producer based in Rome.<br><br>`,
-                    `This is an experimental website for my musical project LUDIK, I will add content as soon as available. Hope you will find something interesting!<br><br>`,
-                    `For info, collaborations or just to say hi, feel free to `
-                ]
-
-                const appendGetInTouchLink = () => {
-
-                    const elem = $("<span>get in touch! (ツ)_.\\m/</span>")
-                        .css({color: "#1EA4F9"})
-                        .hover(function () {
-                            elem.css({color: "white", cursor: "pointer"})
-                        }, function () {
-                            elem.css({color: "#1EA4F9", cursor: "auto"})
-                        })
-
-                    const onClick = () => {
-                        console.log("Scrolling!")
-                        $("#homeFooter")[0].scrollIntoView({behavior: "smooth", block: "center"})
-                    }
-
-                    eventManager.addDomEvent(elem[0], "click", onClick)
-
-                    elem.appendTo(homeConsoleMessage).hide().fadeIn(1000)
-
-                }
-
-                const playPhrase = async (phrase) => {
-
-                    let char
-                    homeConsoleMessage.html(message)
-
-                    for (let i = 0; i < phrase.length; ++i) {
-
-                        if (this.reloadTyping) {
-                            return
-                        }
-
-                        char = phrase.charAt(i)
-
-                        // Assumes an html tag
-                        if (char === "<") {
-                            const j = phrase.substr(i).indexOf(">")
-                            char += phrase.substr(i + 1, j)
-                            i += j
-                        }
-
-                        message += char
-                        const buffer = buffers[i % buffers.length]
-                        const sound = this.audioManager.createSoundFromBuffer(buffer, soundVolume)
-                        char !== " " && sound.start()
-                        homeConsoleMessage.html(message)
-
-                        switch (char) {
-
-                            case ",":
-                            case ":":
-                            case ";":
-                                await wait(phraseTimeoutShort)
-                                break
-
-                            case ".":
-                            case "!":
-                            case "?":
-                                await wait(phraseTimeoutLong)
-                                break
-
-                            default:
-                                await wait(charTimeout)
-
-                        }
-                    }
-
-                }
-
-                for (let phrase of phrases) {
-                    if (!this.reloadTyping) {
-                        await playPhrase(phrase)
-                    }
-                }
-
-                appendGetInTouchLink()
-
-                // Trigger animation only the first time
-                this.isInitialized = true
-
-            },
-
-            reloadConsoleMessage () {
-
-                const phraseTimeout = 200
-
-                this.reloadTyping = true
-
-                setTimeout(async () => {
-                    await this.displayConsoleMessage()
-                }, phraseTimeout)
-            },
-
-            init () {
-
-                this.audioManager = new AudioManager()
-                this.isInitialized = false
-
-            }
-
-        },
-
-        mounted () {
-
-            this.init()
-
-        },
-
-        beforeDestroy () {
-
-            eventManager.removeBusEvents()
-            eventManager.removeDomEvents()
+            homeConsoleMessage.appendChild(elem)
+            // Trigger the fade-in on the next frame.
+            requestAnimationFrame(() => { elem.style.opacity = "1" })
 
         }
 
+        const playPhrase = async (phrase) => {
+
+            let char
+            homeConsoleMessage.innerHTML = message
+
+            for (let i = 0; i < phrase.length; ++i) {
+
+                if (reloadTyping) {
+                    return
+                }
+
+                char = phrase.charAt(i)
+
+                // Assumes an html tag
+                if (char === "<") {
+                    const j = phrase.substr(i).indexOf(">")
+                    char += phrase.substr(i + 1, j)
+                    i += j
+                }
+
+                message += char
+                if (char !== " ") {
+                    try {
+                        const buffer = buffers[i % buffers.length]
+                        const sound = audioManager.createSoundFromBuffer(buffer, soundVolume)
+                        sound.start()
+                    } catch (e) {
+                        // Ignore audio errors (e.g. suspended context) so typing continues.
+                    }
+                }
+                homeConsoleMessage.innerHTML = message
+
+                switch (char) {
+
+                    case ",":
+                    case ":":
+                    case ";":
+                        await wait(phraseTimeoutShort)
+                        break
+
+                    case ".":
+                    case "!":
+                    case "?":
+                        await wait(phraseTimeoutLong)
+                        break
+
+                    default:
+                        await wait(charTimeout)
+
+                }
+            }
+
+        }
+
+        for (let phrase of phrases) {
+            if (!reloadTyping) {
+                await playPhrase(phrase)
+            }
+        }
+
+        appendGetInTouchLink()
+
     }
+
+    function reloadConsoleMessage () {
+
+        const phraseTimeout = 200
+
+        reloadTyping = true
+
+        setTimeout(async () => {
+            await displayConsoleMessage()
+        }, phraseTimeout)
+    }
+
+    const appStore = useAppStore()
+    let hasStartedTyping = false
+
+    // Typing runs once per page load, starting the first time Home is revealed.
+    function startTypingOnFirstReveal (isHomeVisible) {
+        if (!isHomeVisible || hasStartedTyping) return
+        hasStartedTyping = true
+        setTimeout(displayConsoleMessage, 250)
+    }
+
+    watch(() => appStore.isHomeVisible, startTypingOnFirstReveal)
+
+    onMounted(() => {
+        eventManager.addDomEvent(reloadRef.value, "click", reloadConsoleMessage)
+        startTypingOnFirstReveal(appStore.isHomeVisible)
+    })
+
+    onBeforeUnmount(() => {
+        eventManager.removeBusEvents()
+        eventManager.removeDomEvents()
+    })
+
 </script>
 
 <style scoped lang="scss">
-
-    @import "home-style";
+    @use "sass:color";
 
     #homeConsole {
         position: relative;
         min-width: 100vw;
-        padding: $home-wide-padding/2  $home-wide-padding;
+        padding: math.div($home-wide-padding, 2) $home-wide-padding;
         min-height: 16em;
 
         @include linear-gradient(
                         20deg,
                         rgba($scifi-cyan-hover, 0.1) 0%,
                         rgba($scifi-cyan-hover, 0.1) 35%,
-                        rgba(lighten($scifi-cyan-hover, 70), 0.3) 45%,
+                        rgba(color.adjust($scifi-cyan-hover, $lightness: 70%), 0.3) 45%,
                         rgba($scifi-cyan-hover, 0.1) 55%,
                         rgba($scifi-cyan-hover, 0.1) 100%
         );
@@ -240,7 +213,7 @@
     .home-console-text {
         font-size: 1em;
         line-height: 1.2em;
-        color: lighten($scifi-cyan-hover, 35);
+        color: color.adjust($scifi-cyan-hover, $lightness: 35%);
         text-align: left;
         text-justify: none;
     }

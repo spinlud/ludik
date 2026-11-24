@@ -11,7 +11,7 @@
             <br>
             <p class="home-text justify-text">
                 After releasing my first album
-                <router-link :to="{name: 'Albums', params: {scroll: true}}" class="home-link">Positron - Chapter 1</router-link>
+                <router-link :to="{ name: 'Albums', query: { scroll: 'true' } }" class="home-link">Positron - Chapter 1</router-link>
                 I've decided to build this experimental website in my free time. My goal was not to create a video game but an atmosphere,
                 more precisely the feeling of a voyage across the space. It was also an excuse to learn about technologies
                 I didn't know before like <a href="https://threejs.org/" target="_blank" class="home-link">three.js</a> or
@@ -27,7 +27,7 @@
                 Thanks to the the following libraries/technologies that made this website possible:
             </p>
             <ul class="logos-container">
-                <li v-for="lib in libraries" class="logo-column">
+                <li v-for="lib in libraries" :key="lib.name" class="logo-column">
                     <a :href="lib.url" target="_blank" class="logo-link">
                         <img :src="lib.logo" :alt="lib.name" class="logo-image" />
                     </a>
@@ -39,7 +39,7 @@
                 Thanks to the following open source projects:
             </p>
             <ul>
-                <li v-for="p in projects" class="proj-li">
+                <li v-for="p in projects" :key="p.name" class="proj-li">
                     <a :href="p.url" target="_blank" class="home-link">• {{p.name}}</a>
                 </li>
             </ul>
@@ -53,110 +53,93 @@
     </div>
 </template>
 
-<script>
+<script setup>
 
-    export default {
+    import { onMounted } from "vue"
 
-        name: "About",
-
-        props: {
-            scroll: {
-                type: Boolean,
-                default: false
-            }
-        },
-
-        data () {
-
-            return {
-
-                libraries: [
-                    {
-                        name: "node.js",
-                        logo: "assets/images/logos/nodejs_logo.png",
-                        url: "https://nodejs.org/en/"
-                    },
-                    {
-                        name: "three.js",
-                        logo: "assets/images/logos/threejs_logo.png",
-                        url: "https://threejs.org/"
-                    },
-                    {
-                        name: "vue.js",
-                        logo: "assets/images/logos/vuejs_logo.png",
-                        url: "https://vuejs.org/"
-                    },
-                    {
-                        name: "webpack",
-                        logo: "assets/images/logos/webpack_logo.png",
-                        url: "https://webpack.js.org/"
-                    },
-                    {
-                        name: "babel",
-                        logo: "assets/images/logos/babel_logo.png",
-                        url: "https://babeljs.io/"
-                    },
-                    {
-                        name: "sass",
-                        logo: "assets/images/logos/sass_logo.png",
-                        url: "https://sass-lang.com/"
-                    },
-                    {
-                        name: "unity",
-                        logo: "assets/images/logos/unity_logo.png",
-                        url: "https://unity.com/"
-                    },
-                    {
-                        name: "blender",
-                        logo: "assets/images/logos/blender_logo.png",
-                        url: "https://www.blender.org/"
-                    },
-
-                ],
-
-                projects: [
-                    {
-                        name: "Tween.js",
-                        url: "https://github.com/tweenjs/tween.js/"
-                    },
-                    {
-                        name: "UnityGLTF",
-                        url: "https://github.com/KhronosGroup/UnityGLTF"
-                    },
-                    {
-                        name: "Three Pathfinding",
-                        url: "https://github.com/donmccurdy/three-pathfinding"
-                    },
-                    {
-                        name: "Postprocessing",
-                        url: "https://github.com/vanruesc/postprocessing"
-                    },
-                    {
-                        name: "Three Nebula",
-                        url: "https://github.com/creativelifeform/three-nebula"
-                    },
-                ]
-
-            }
-
-        },
-
-        mounted () {
-
-            if (this.scroll) {
-
-                $("#about .home-title")[0].scrollIntoView({behavior: "smooth", block: "center"})
-
-            }
-
+    const props = defineProps({
+        scroll: {
+            type: Boolean,
+            default: false
         }
-    }
+    })
+
+    const libraries = [
+        {
+            name: "node.js",
+            logo: "/assets/images/logos/nodejs_logo.png",
+            url: "https://nodejs.org/en/"
+        },
+        {
+            name: "three.js",
+            logo: "/assets/images/logos/threejs_logo.png",
+            url: "https://threejs.org/"
+        },
+        {
+            name: "vue.js",
+            logo: "/assets/images/logos/vuejs_logo.png",
+            url: "https://vuejs.org/"
+        },
+        {
+            name: "webpack",
+            logo: "/assets/images/logos/webpack_logo.png",
+            url: "https://webpack.js.org/"
+        },
+        {
+            name: "babel",
+            logo: "/assets/images/logos/babel_logo.png",
+            url: "https://babeljs.io/"
+        },
+        {
+            name: "sass",
+            logo: "/assets/images/logos/sass_logo.png",
+            url: "https://sass-lang.com/"
+        },
+        {
+            name: "unity",
+            logo: "/assets/images/logos/unity_logo.png",
+            url: "https://unity.com/"
+        },
+        {
+            name: "blender",
+            logo: "/assets/images/logos/blender_logo.png",
+            url: "https://www.blender.org/"
+        }
+    ]
+
+    const projects = [
+        {
+            name: "Tween.js",
+            url: "https://github.com/tweenjs/tween.js/"
+        },
+        {
+            name: "UnityGLTF",
+            url: "https://github.com/KhronosGroup/UnityGLTF"
+        },
+        {
+            name: "Three Pathfinding",
+            url: "https://github.com/donmccurdy/three-pathfinding"
+        },
+        {
+            name: "Postprocessing",
+            url: "https://github.com/vanruesc/postprocessing"
+        },
+        {
+            name: "Three Nebula",
+            url: "https://github.com/creativelifeform/three-nebula"
+        }
+    ]
+
+    onMounted(() => {
+        if (props.scroll) {
+            const title = document.querySelector("#about .home-title")
+            title && title.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
+    })
 
 </script>
 
 <style scoped lang="scss">
-
-    @import "../home-style";
 
     .logos-container {
         display: -ms-flexbox; /* IE10 */

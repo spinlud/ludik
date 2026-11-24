@@ -1,0 +1,6 @@
+# cron.d entry for certificate renewal; install as /etc/cron.d/ludik-cert-renew
+# m h dom mon dow user command
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+17 3 * * * root cd /home/ludovico_fabbri/projects/ludik && ./certbot/renew-certificate.sh >> /var/log/ludik-cert-renew.log 2>&1

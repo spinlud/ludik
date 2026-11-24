@@ -15,11 +15,10 @@
     </div>
 </template>
 
-<script>
+<script setup>
 
-    import { states, mutations } from "../../store/storeUtils"
-    import AudioManager from "../shared/AudioManager"
-    import EventManager from "../shared/EventManager"
+    import { computed } from "vue"
+    import { useAppStore } from "@/stores/app"
     import HomeClose from "./HomeClose.vue"
     import HomeHeader from "./HomeHeader.vue"
     import HomeFooter from "./HomeFooter.vue"
@@ -27,85 +26,13 @@
     import Console from "./Console.vue"
     import ScifiMenu from "./ScifiMenu.vue"
 
-    const eventManager = new EventManager()
-    const TAG = "[Home]"
+    const store = useAppStore()
 
-    export default {
-
-        name: "Home",
-
-        components: {
-
-            homeClose: HomeClose,
-            homeHeader: HomeHeader,
-            homeFooter: HomeFooter,
-            separator: Separator,
-            console: Console,
-            scifiMenu: ScifiMenu
-
-        },
-
-        computed: {
-
-            isHomeVisible () {
-
-                return this.$store.getters.isHomeVisible
-
-            },
-
-            homeState () {
-
-                return this.$store.state.homeState
-
-            }
-
-        },
-
-        watch: {
-
-            homeState (newVal, oldVal) {
-
-                switch (newVal) {
-
-                    case states.home.start:
-                        AudioManager.resume()
-                        this.$el.style.display = "block"
-                        break
-
-                    case states.home.stop:
-                        AudioManager.suspend()
-                        this.$el.style.display = "none"
-                        break
-
-                }
-            }
-
-        },
-
-        mounted () {
-
-
-        },
-
-        beforeDestroy () {
-
-            eventManager.removeBusEvents()
-            eventManager.removeDomEvents()
-            console.log(TAG, "beforeDestroy")
-
-        }
-
-    }
+    const isHomeVisible = computed(() => store.isHomeVisible)
 
 </script>
 
 <style scoped lang="scss">
-
-    @import "../../styles/base/reset";
-    @import "../../styles/base/typography";
-    @import "../../styles/helpers/variables";
-    @import "../../styles/helpers/colors";
-    @import "../../styles/helpers/mixins";
 
     canvas {
         display: block;

@@ -1,13 +1,16 @@
 /**
  * ---------------------------------------------------------------------------------------
  * EventManager.js
+ *
+ * Tracks DOM and bus event subscriptions so they can be torn down together. The event bus
+ * is backed by `mitt` (Vue 3 removed the instance-as-event-bus pattern).
  * ---------------------------------------------------------------------------------------
  */
 
-import Vue from "vue"
+import mitt from "mitt"
 
 const TAG = "[EventManager]"
-const eventBus = new Vue({})
+const eventBus = mitt()
 
 export default class EventManager {
 
@@ -17,7 +20,7 @@ export default class EventManager {
     }
 
     emit (event, data) {
-        eventBus.$emit(event, data)
+        eventBus.emit(event, data)
     }
 
     addDomEvent (target, event, cb, bubble = false) {
@@ -40,18 +43,23 @@ export default class EventManager {
             cb: cb
         })
 
-        eventBus.$on(event, cb)
+        eventBus.on(event, cb)
 
     }
 
     addBusEventOnce (event, cb) {
 
+        const handler = (data) => {
+            eventBus.off(event, handler)
+            cb(data)
+        }
+
         this.busEvents.push({
             event: event,
-            cb: cb
+            cb: handler
         })
 
-        eventBus.$once(event, cb)
+        eventBus.on(event, handler)
 
     }
 
@@ -83,7 +91,7 @@ export default class EventManager {
 
         while (this.busEvents.length) {
             e = this.busEvents.pop()
-            eventBus.$off(e.event, e.cb)
+            eventBus.off(e.event, e.cb)
             count += 1
         }
 
