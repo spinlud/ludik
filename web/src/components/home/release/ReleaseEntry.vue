@@ -1,18 +1,23 @@
 <!--
-    One release in the shared layout: artwork next to a SoundCloud player,
-    then title, release date and description. The default slot renders below
-    the description for per-release extras (per-track text, tracklists, ...).
+    One release in the shared layout: artwork on the left, and a right column
+    with a SoundCloud player followed by title, release date and description.
+    The default slot renders full width below both columns for per-release
+    extras (per-track text, tracklists, ...). Narrow screens stack everything.
 -->
 <template>
     <li class="release-li">
-        <img :src="artwork" alt="" class="release-artwork"><!-- no whitespace between inline-blocks
-        --><div class="release-player">
-            <iframe :src="soundcloudPlayerSrc(player, { visual: false })" :title="title" width="100%" height="100%" frameborder="no" scrolling="no" allow="autoplay"></iframe>
+        <img :src="artwork" alt="" class="release-artwork">
+        <div class="release-side">
+            <div class="release-player">
+                <SoundcloudPlayer :resource="player" :title="title" />
+            </div>
+            <div class="release-metadata">
+                <span class="release-title">{{ title }}</span>
+                <span class="release-date">{{ releaseDate }}</span>
+                <p class="home-text justify-text release-description">{{ description }}</p>
+            </div>
         </div>
-        <div class="release-metadata">
-            <span class="release-title">{{ title }}</span>
-            <span class="release-date">{{ releaseDate }}</span>
-            <p class="home-text justify-text release-description">{{ description }}</p>
+        <div v-if="$slots.default" class="release-extra">
             <slot></slot>
         </div>
     </li>
@@ -20,7 +25,7 @@
 
 <script setup>
 
-    import { soundcloudPlayerSrc } from "./soundcloud.js"
+    import SoundcloudPlayer from "./SoundcloudPlayer.vue"
 
     defineProps({
         title: { type: String, required: true },
@@ -37,41 +42,49 @@
     @use "sass:color";
 
     .release-li {
-        display: block;
+        display: grid;
+        grid-template-columns: calc( (100vw - 3 * #{$home-wide-padding}) * 0.5 ) minmax(0, 1fr);
+        grid-template-areas:
+            "artwork side"
+            "extra extra";
+        align-items: start;
         margin-top: $home-wide-padding;
-    }
+        color: color.adjust($silver-chalice2, $lightness: 10%);
+        background: black;
 
-    .release-artwork,
-    .release-player {
-        display: inline-block;
-        vertical-align: top;
-        width: calc( (100vw - 3 * #{$home-wide-padding}) * 0.5 );
-        height: calc( (100vw - 3 * #{$home-wide-padding}) * 0.5 );
+        @include narrow-screen {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-areas:
+                "artwork"
+                "side"
+                "extra";
+        }
     }
 
     .release-artwork {
-        @include narrow-screen {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
+        grid-area: artwork;
+        display: block;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        object-fit: cover;
     }
 
-    .release-player {
-        @include narrow-screen {
-            display: block;
-            width: 100%;
-            height: 350px;
-        }
+    .release-side {
+        grid-area: side;
+        min-width: 0;
     }
 
     .release-metadata {
         display: flex;
         flex-direction: column;
         gap: 1em;
-        padding: 2em 1em $home-wide-padding;
-        color: color.adjust($silver-chalice2, $lightness: 10%);
-        background: black;
+        padding: 2em 1em 1em;
+    }
+
+    .release-extra {
+        grid-area: extra;
+        padding: 0 1em $home-wide-padding;
     }
 
     .release-title {

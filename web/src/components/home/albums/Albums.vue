@@ -9,9 +9,7 @@
                     <ul class="album-tracks">
                         <li v-for="track in album.tracks" :key="track.index" class="justify-text">
                             <span class="album-track-title">{{track.index + 1}}. {{track.title}}</span>
-                            <div v-if="layoutB" class="album-track-player">
-                                <iframe :src="soundcloudPlayerSrc(track.player, { visual: false })" :title="track.title" width="100%" height="100%" frameborder="no" scrolling="no" allow="autoplay"></iframe>
-                            </div>
+                            <SoundcloudPlayer v-if="showTrackPlayers" :resource="track.player" :title="track.title" />
                             <span class="home-text">{{track.description}}</span>
                         </li>
                     </ul>
@@ -26,7 +24,7 @@
     import { computed, onMounted } from "vue"
     import { useRoute } from "vue-router"
     import ReleaseEntry from "../release/ReleaseEntry.vue"
-    import { soundcloudPlayerSrc } from "../release/soundcloud.js"
+    import SoundcloudPlayer from "../release/SoundcloudPlayer.vue"
 
     const props = defineProps({
         scroll: {
@@ -39,7 +37,7 @@
 
     // Layout (b) adds a compact SoundCloud player under each track.
     const route = useRoute()
-    const layoutB = computed(() => route.query.layout === "b")
+    const showTrackPlayers = computed(() => route.query.layout === "b")
 
     const albums = [
         {
@@ -105,9 +103,4 @@
     .album-track-title {
         font-size: 1.2em;
         color: #fff;
-    }
-
-    .album-track-player {
-        height: 166px;
-    }
-</style>
+    }</style>

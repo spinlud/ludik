@@ -10,7 +10,7 @@
                         <li v-for="row in set.tracklist" :key="row.time" class="tracklist-row">
                             <span class="tracklist-time">{{row.time}}</span>
                             <span class="tracklist-text">{{row.text}}</span>
-                            <span v-if="row.tag" class="tracklist-tag">{{row.tag}}</span>
+                            <span v-if="row.tag" class="tracklist-tag">[{{row.tag}}]</span>
                         </li>
                     </ol>
                 </ReleaseEntry>
@@ -60,8 +60,8 @@
 
     onMounted(() => {
         if (props.scroll) {
-            const title = document.querySelector("#dj-sets .home-title")
-            title && title.scrollIntoView({ behavior: "smooth", block: "center" })
+            const heading = document.querySelector("#dj-sets .home-title")
+            heading && heading.scrollIntoView({ behavior: "smooth", block: "center" })
         }
     })
 
@@ -84,6 +84,7 @@
 
         @include narrow-screen {
             grid-template-columns: auto 1fr;
+            row-gap: 0.3em;
         }
     }
 
@@ -103,6 +104,7 @@
 
         @include narrow-screen {
             grid-column: 2;
+            grid-row: 2;
         }
     }
 </style>

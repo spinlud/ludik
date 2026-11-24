@@ -238,6 +238,80 @@ checks.singles = async (h) => {
     await h.page.locator("#singles").screenshot({ path: path.join(outDir, "singles.png") })
 }
 
+// --- check: releaseLayout ---
+// Wide: artwork on the left; the player (166px for a track, ~450px for a
+// playlist) heads the right column with the title under it; the slot content
+// spans both columns below. Narrow: artwork, player, title stacked.
+// Also captures wide and narrow screenshots of each section after the iframes load.
+checks.releaseLayout = async (h) => {
+    const NARROW = { width: 390, height: 844 }
+    const sections = [
+        { name: "albums", route: "/albums", root: "#albums", playerHeight: 450, slot: ".album-tracks" },
+        { name: "albums-b", route: "/albums", query: { layout: "b" }, root: "#albums", playerHeight: 450, slot: ".album-tracks" },
+        { name: "singles", route: "/singles", root: "#singles", playerHeight: 166 },
+        { name: "dj-sets", route: "/dj-sets", root: "#dj-sets", playerHeight: 166, slot: ".tracklist" },
+    ]
+    const measure = (root, slot) => h.page.$eval(`${root} .release-li`, (li, slotSel) => {
+        const box = (sel) => {
+            const el = li.querySelector(sel)
+            if (!el) return null
+            const r = el.getBoundingClientRect()
+            return { x: r.left, y: r.top, w: r.width, h: r.height, bottom: r.bottom, right: r.right }
+        }
+        return { li: box(":scope"), art: box(".release-artwork"), player: box(".release-player iframe"), title: box(".release-title"), slot: slotSel ? box(slotSel) : null }
+    }, slot || null)
+    const near = (a, b, tol) => Math.abs(a - b) <= tol
+
+    for (const viewport of [VIEWPORT, NARROW]) {
+        const wide = viewport === VIEWPORT
+        await h.page.setViewportSize(viewport)
+        for (const s of sections) {
+            await h.gotoRoute(s.route, s.query || {})
+            await h.wait(4000)
+            // Scroll each player into view so the widgets load and paint, then
+            // require every widget frame to show its play button.
+            for (const frame of await h.page.$$(`${s.root} iframe`)) {
+                await frame.scrollIntoViewIfNeeded()
+                await h.wait(1500)
+            }
+            const widgets = h.page.frames().filter((f) => f.url().startsWith("https://w.soundcloud.com/player/"))
+            const rendered = await Promise.all(widgets.map((f) =>
+                f.waitForSelector(".playButton", { state: "visible", timeout: 10000 }).then(() => true, () => false)))
+            const expected = (await h.iframes(s.root)).length
+            if (rendered.filter(Boolean).length < expected) {
+                throw new Error(`${s.name}: ${rendered.filter(Boolean).length}/${expected} SoundCloud widgets rendered`)
+            }
+            await h.page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: "start" }), s.root)
+            await h.wait(500)
+            const m =await measure(s.root, s.slot)
+            const tag = `${s.name} ${wide ? "wide" : "narrow"}`
+            if (!near(m.player.h, s.playerHeight, 20)) throw new Error(`${tag}: player height ${m.player.h}, expected ~${s.playerHeight}`)
+            if (m.title.y < m.player.bottom - 1) throw new Error(`${tag}: title is not below the player`)
+            if (wide) {
+                if (m.player.x < m.art.right - 1) throw new Error(`${tag}: player is not right of the artwork`)
+                if (!near(m.player.y, m.art.y, 2)) throw new Error(`${tag}: player top ${m.player.y} != artwork top ${m.art.y}`)
+                if (m.title.x < m.art.right - 1) throw new Error(`${tag}: title is not in the right column`)
+            } else {
+                if (m.player.y < m.art.bottom - 1) throw new Error(`${tag}: player is not below the artwork`)
+            }
+            if (m.slot) {
+                if (m.slot.y < Math.max(m.art.bottom, m.title.bottom) - 1) throw new Error(`${tag}: slot content overlaps the columns`)
+                if (m.slot.x > m.art.x + 40) throw new Error(`${tag}: slot content is not full width (x=${m.slot.x})`)
+            }
+            await h.page.locator(s.root).screenshot({ path: path.join(outDir, `${s.name}-${wide ? "wide" : "narrow"}.png`) })
+            // Element screenshots taller than the viewport leave off-screen
+            // iframes unpainted, so also capture the viewport at the slot players.
+            const slotPlayer = s.slot && await h.page.$(`${s.root} ${s.slot} iframe`)
+            if (slotPlayer) {
+                await slotPlayer.scrollIntoViewIfNeeded()
+                await h.wait(1500)
+                await h.page.screenshot({ path: path.join(outDir, `${s.name}-players-${wide ? "wide" : "narrow"}.png`) })
+            }
+        }
+    }
+    await h.page.setViewportSize(VIEWPORT)
+}
+
 // ---------------------------------------------------------------------------
 
 ;(async () => {
