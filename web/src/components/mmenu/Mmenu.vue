@@ -11,6 +11,7 @@
                 <li class="mymenu-link" v-on:click="onHomeClick"><a>Home</a></li>
                 <li class="mymenu-link" v-on:click="onAlbumsClick"><a>Albums</a></li>
                 <li class="mymenu-link" v-on:click="onSinglesClick"><a>Singles</a></li>
+                <li class="mymenu-link" v-on:click="onDjSetsClick"><a>DJ Sets</a></li>
                 <li class="mymenu-link" v-on:click="onAboutClick"><a>About</a></li>
                 <li class="mymenu-link" v-on:click="onSpaceshipClick"><a>Spaceship</a></li>
             </ul>
@@ -47,6 +48,11 @@
     function onSinglesClick () {
         mmenu.close()
         router.push({ name: "Singles", query: { scroll: "true" } })
+    }
+
+    function onDjSetsClick () {
+        mmenu.close()
+        router.push({ name: "DjSets", query: { scroll: "true" } })
     }
 
     function onAboutClick () {

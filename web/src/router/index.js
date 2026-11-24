@@ -5,6 +5,7 @@ import Home from '@/components/home/Home.vue'
 import LatestNews from '@/components/home/latest-news/LatestNews.vue'
 import Albums from '@/components/home/albums/Albums.vue'
 import Singles from '@/components/home/singles/Singles.vue'
+import DjSets from '@/components/home/dj-sets/DjSets.vue'
 import About from '@/components/home/about/About.vue'
 
 // The `scroll` flag travels as a query param (vue-router no longer forwards
@@ -33,6 +34,12 @@ const routes = [
                 path: 'singles',
                 name: 'Singles',
                 component: Singles,
+                props: scrollProps
+            },
+            {
+                path: 'dj-sets',
+                name: 'DjSets',
+                component: DjSets,
                 props: scrollProps
             },
             {
