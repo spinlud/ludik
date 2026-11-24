@@ -1,18 +1,34 @@
 {
-  "name": "ludik-web",
-  "version": "0.0.0",
+  "name": "ludik",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "description": "LUDIK experimental website. Main technologies: node.js, vue.js, webgl, three.js, webaudio, vite.",
   "engines": {
     "node": ">=22"
   },
+  "main": "server.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server.js",
+    "certbot-ssl-certificate": "./certbot/generate-certificate.sh",
+    "certbot-ssl-certificate-renew": "./certbot/renew-certificate.sh",
+    "docker-stop-containers": "docker ps -a | awk -F '[ ]+' 'NR>1 {print($1)}' | xargs -n1 docker stop | xargs -n1 docker rm --volumes",
+    "docker-delete-images": "docker rmi $(docker images -q)",
+    "docker-compose": "docker compose up -d --build",
+    "docker-compose-logs": "docker compose logs -f -t"
+  },
+  "author": "Ludovico Fabbri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spinlud/ludik.git"
   },
   "dependencies": {
     "@tweenjs/tween.js": "^17.3.0",
+    "express": "^4.16.4",
     "mitt": "^3.0.1",
     "mmenu-js": "^9.3.0",
     "pinia": "^4.0.3",
@@ -28,5 +44,16 @@
     "@vitejs/plugin-vue": "^6.0.8",
     "sass": "^1.103.1",
     "vite": "^8.2.2"
-  }
+  },
+  "keywords": [
+    "music",
+    "webaudio",
+    "webgl",
+    "three",
+    "three.js",
+    "threejs",
+    "node.js",
+    "nodejs",
+    "vue.js"
+  ]
 }
