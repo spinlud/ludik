@@ -1,6 +1,7 @@
-// Smoke checks for the Home view (albums, singles, DJ sets, intro console).
-// Boots the app, passes the click-to-start gate, walks the player into the
-// stargate so the World stops and Home is revealed, then runs named checks.
+// Smoke checks for the World (jump) and the Home view (albums, singles, DJ sets,
+// intro console). Boots the app, passes the click-to-start gate, runs the World
+// checks, then walks the player into the stargate so the World stops and Home
+// is revealed, then runs the Home checks.
 // Prints PASS/FAIL per check and exits non-zero on any failure.
 // Runs headless with a stubbed Pointer Lock API, so it never captures the
 // real mouse cursor or steals window focus. Pass --headed to watch the run.
@@ -132,9 +133,112 @@ const helpers = (page) => ({
 
 // ---------------------------------------------------------------------------
 // Checks: each returns nothing on success and throws on failure.
+// worldChecks run in the World before the stargate, checks run once Home is visible.
 // ---------------------------------------------------------------------------
 
+const worldChecks = {}
 const checks = {}
+
+// --- check: jump ---
+// Space lifts the camera once along a fixed arc and returns it to exactly the
+// eye height. Holding Space and pressing it mid-air add nothing, a pause
+// freezes the arc, and Space does nothing (and stays unprevented) while unlocked.
+worldChecks.jump = async (h) => {
+    const EYE_HEIGHT = 2.6
+    const PEAK = 3.2
+    const LANDED_AFTER = 2500
+    const { page } = h
+    const y = () => page.evaluate(() => window.__ludikParity.getPose().y)
+    const assertGrounded = async (tag) => {
+        const now = await y()
+        if (now !== EYE_HEIGHT) throw new Error(`${tag}: y is ${now}, expected ${EYE_HEIGHT}`)
+    }
+    // Records y on every frame for the given time while `act` runs. Counts the
+    // takeoffs (frames where y leaves the eye height) and the highest y.
+    const record = async (ms, act) => {
+        const samples = page.evaluate(({ ms, ground }) => new Promise((resolve) => {
+            const start = performance.now()
+            const out = { max: ground, takeoffs: 0, airborneMs: 0 }
+            let prev = ground
+            let takeoffAt = 0
+            const tick = (now) => {
+                const cur = window.__ludikParity.getPose().y
+                out.max = Math.max(out.max, cur)
+                if (prev === ground && cur !== ground) { out.takeoffs++; takeoffAt = now }
+                if (prev !== ground && cur === ground) out.airborneMs = now - takeoffAt
+                prev = cur
+                if (performance.now() - start < ms) requestAnimationFrame(tick)
+                else resolve(out)
+            }
+            requestAnimationFrame(tick)
+        }), { ms, ground: EYE_HEIGHT })
+        await act()
+        return samples
+    }
+    const assertSingleJump = (tag, r) => {
+        if (r.takeoffs !== 1) throw new Error(`${tag}: expected 1 takeoff, got ${r.takeoffs}`)
+        if (r.max > PEAK + 1e-6 || r.max < PEAK - 0.1) throw new Error(`${tag}: peak y ${r.max}, expected ~${PEAK}`)
+        if (r.airborneMs > 1500) throw new Error(`${tag}: airborne for ${Math.round(r.airborneMs)}ms, expected ~1000ms`)
+    }
+    const spacePrevented = () => page.evaluate(() => {
+        const e = new KeyboardEvent("keydown", { keyCode: 32, cancelable: true, bubbles: true })
+        document.dispatchEvent(e)
+        return e.defaultPrevented
+    })
+    const lock = async () => {
+        await page.evaluate(() => document.querySelector("#pointerLockOverlay").click())
+        await h.wait(500)
+    }
+    const unlock = async () => {
+        await page.evaluate(() => document.exitPointerLock())
+        await h.wait(200)
+    }
+
+    await assertGrounded("before jump")
+    assertSingleJump("press", await record(LANDED_AFTER, () => page.keyboard.press("Space")))
+    await assertGrounded("after press")
+
+    // Repeated down() without up() sends auto-repeat keydowns.
+    const held = await record(LANDED_AFTER, async () => {
+        for (let i = 0; i < 20; i++) {
+            await page.keyboard.down("Space")
+            await h.wait(90)
+        }
+        await page.keyboard.up("Space")
+    })
+    assertSingleJump("held", held)
+    await assertGrounded("after held")
+
+    const midAir = await record(LANDED_AFTER, async () => {
+        await page.keyboard.press("Space")
+        await h.wait(400)
+        await page.keyboard.press("Space")
+    })
+    assertSingleJump("mid-air press", midAir)
+    await assertGrounded("after mid-air press")
+
+    await page.keyboard.press("Space")
+    await h.wait(300)
+    await unlock()
+    const frozen = await y()
+    await h.wait(2000)
+    if (frozen === EYE_HEIGHT) throw new Error("pause: expected to be airborne")
+    if (await y() !== frozen) throw new Error("pause: y changed while unlocked")
+    if (await spacePrevented()) throw new Error("Space is prevented while unlocked")
+    await lock()
+    await h.wait(LANDED_AFTER)
+    await assertGrounded("after resume")
+
+    await unlock()
+    const unlocked = await record(1000, () => page.keyboard.press("Space"))
+    if (unlocked.takeoffs !== 0) throw new Error("Space jumped while unlocked")
+    await lock()
+    const resumed = await record(1000, async () => {})
+    if (resumed.takeoffs !== 0) throw new Error("a press made while unlocked was replayed on resume")
+    if (!await spacePrevented()) throw new Error("Space is not prevented while locked")
+    await h.wait(LANDED_AFTER)
+    await assertGrounded("after the last jump")
+}
 
 // --- check: homeVisible ---
 checks.homeVisible = async (h) => {
@@ -401,19 +505,23 @@ checks.tabIdentity = async (h) => {
 
     try {
         await passGate(page)
-        await enterHomeViaStargate(page)
         const h = helpers(page)
-        for (const [name, fn] of Object.entries(checks)) {
-            try {
-                await page.bringToFront()
-                await fn(h)
-                results.push({ name, ok: true })
-                console.log(`PASS ${name}`)
-            } catch (e) {
-                results.push({ name, ok: false })
-                console.log(`FAIL ${name}: ${e.message}`)
+        const runChecks = async (group) => {
+            for (const [name, fn] of Object.entries(group)) {
+                try {
+                    await page.bringToFront()
+                    await fn(h)
+                    results.push({ name, ok: true })
+                    console.log(`PASS ${name}`)
+                } catch (e) {
+                    results.push({ name, ok: false })
+                    console.log(`FAIL ${name}: ${e.message}`)
+                }
             }
         }
+        await runChecks(worldChecks)
+        await enterHomeViaStargate(page)
+        await runChecks(checks)
     } catch (e) {
         results.push({ name: "boot", ok: false })
         console.log(`FAIL boot: ${e.message}`)

@@ -104,9 +104,10 @@ chroma variance in dark regions; noise artifacts raise it.
 ## Home smoke checks (`smoke-home.js`)
 
 `node smoke-home.js <baseUrl> [outDir] [--headed]` (dev server only: it needs the
-`window.__ludikParity` hook). It passes the click-to-start gate, then teleports the
-player onto the bridge and into the stargate so the World stops and Home is
-revealed the real way.
+`window.__ludikParity` hook). It passes the click-to-start gate, runs each named
+function in `worldChecks` while the World is running, then teleports the player
+onto the bridge and into the stargate so the World stops and Home is revealed the
+real way.
 
 It runs headless by default with the Pointer Lock API stubbed through an init script.
 The app sees a granted lock, but the real mouse cursor is never captured and no
