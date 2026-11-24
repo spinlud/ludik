@@ -362,6 +362,27 @@ checks.legacyHashRedirect = async (h) => {
     }
 }
 
+// --- check: tabIdentity ---
+// The tab reads "Ludik" on every route and both linked icons decode as images.
+// Decoding matters: the SPA fallback answers 200 with HTML for a missing file.
+checks.tabIdentity = async (h) => {
+    for (const route of ["/", "/albums"]) {
+        await h.gotoRoute(route)
+        const title = await h.page.title()
+        if (title !== "Ludik") throw new Error(`${route}: title is ${JSON.stringify(title)}`)
+    }
+    const icons = await h.page.$$eval('link[rel="icon"]', (links) => Promise.all(links.map(async (link) => {
+        const img = new Image()
+        img.src = link.href
+        const decoded = await img.decode().then(() => true, () => false)
+        return { path: new URL(link.href).pathname, decoded }
+    })))
+    const paths = icons.map((icon) => icon.path).join(" ")
+    if (paths !== "/favicon.ico /favicon.svg") throw new Error(`linked icons are ${JSON.stringify(paths)}`)
+    const broken = icons.filter((icon) => !icon.decoded).map((icon) => icon.path)
+    if (broken.length) throw new Error(`not an image: ${broken.join(", ")}`)
+}
+
 ;(async () => {
     const consoleLines = []
     const results = []
